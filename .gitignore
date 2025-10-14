@@ -1,0 +1,3 @@
+.env
+/mapenv/
+/__pycache__/

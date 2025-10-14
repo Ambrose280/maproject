@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+jinja2
+tortoise-orm
+pydantic<2
+passlib[bcrypt]
+aiosqlite
+itsdangerous

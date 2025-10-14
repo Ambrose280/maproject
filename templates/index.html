@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Home | Map Project{% endblock %}
+
+{% block content %}
+<div class="text-center">
+  <h1 class="text-3xl font-bold mb-4">
+    Welcome{% if user %}, {{ user.username }}{% endif %}
+  </h1>
+
+  <!-- Map container: square, centered, and with a max-width for larger screens -->
+  <div class="max-w-xl mx-auto">
+    <div id="map" class="w-full aspect-square rounded-lg shadow-lg mb-6"></div>
+  </div>
+
+  <!-- Action Buttons: Stack vertically on small screens, row on larger screens -->
+  <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mb-8">
+    <!-- Show & Save Location -->
+    <button id="locate-btn"
+       class="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transform hover:-translate-y-0.5 transition-all duration-200">
+      📍 Show & Save My Location
+    </button>
+
+    <!-- Auto Update Toggle -->
+    <button id="toggle-auto-btn"
+       class="w-full sm:w-auto bg-green-600 text-white px-5 py-2.5 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transform hover:-translate-y-0.5 transition-all duration-200">
+      🔄 Start Auto Update
+    </button>
+  </div>
+
+  <div class="max-w-2xl mx-auto text-left">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Your Locations</h2>
+
+    <!-- Scrollable container -->
+    <div class="h-64 overflow-y-auto border rounded-lg shadow-inner bg-gray-50 p-2">
+      <ul id="location-list" class="space-y-2">
+        {% for loc in locations %}
+          <li class="p-3 bg-white shadow rounded-md flex justify-between items-center transition-colors hover:bg-gray-100">
+            <div>
+              <span class="font-semibold text-gray-800">{{ "%.4f"|format(loc.lat|float) }}, {{ "%.4f"|format(loc.long|float) }}</span><br>
+              <span class="text-sm text-gray-500">{{ loc.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+            </div>
+            <button class="delete-btn text-red-500 hover:text-red-700 font-bold p-2 rounded-full transition-colors hover:bg-red-100" data-id="{{ loc.id }}">🗑</button>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+</div>
+<script>
+// Use event delegation for delete buttons. This is more efficient because it
+// attaches one listener to the document and works for buttons added dynamically.
+document.addEventListener("click", async (event) => {
+  if (event.target.classList.contains("delete-btn")) {
+    event.preventDefault(); // Prevent any default button behavior
+    const id = event.target.dataset.id;
+    if (!id) return console.error("❌ No ID found");
+    
+    const res = await fetch(`/delete_location/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      console.log(`🗑 Deleted location ${id}`);
+      event.target.closest('li').remove(); // Visually remove the item immediately
+    } else {
+      console.error("❌ Failed to delete location");
+    }
+  }
+});
+</script>
+<script>
+  mapboxgl.accessToken = "{{ mapbox_token }}";
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [2.5, 9.5], // Centered on West Africa
+    zoom: 4
+  });
+
+  let userMarker = null;
+
+  // Show & Save Location
+  document.getElementById('locate-btn').addEventListener('click', e => {
+    e.preventDefault();
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const lng = pos.coords.longitude;
+        const lat = pos.coords.latitude;
+
+        map.flyTo({ center: [lng, lat], zoom: 13 });
+
+        if (userMarker) userMarker.remove();
+        userMarker = new mapboxgl.Marker({ color: 'blue' })
+          .setLngLat([lng, lat])
+          .setPopup(new mapboxgl.Popup().setText('You are here'))
+          .addTo(map);
+
+        const response = await fetch('/save_location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, long: lng })
+        });
+
+        if (response.ok) {
+          const newLoc = await response.json();
+          console.log("✅ Location saved successfully!");
+          prependLocationToList(newLoc.data); // Add the new location to the top of the list
+        } else {
+          console.error("❌ Failed to save location.");
+        }
+      });
+    } else {
+      alert("Geolocation not supported by your browser.");
+    }
+  });
+
+  // Auto update toggle
+  let intervalId = null;
+  const toggleBtn = document.getElementById('toggle-auto-btn');
+  toggleBtn.addEventListener('click', e => {
+    e.preventDefault();
+
+    if (intervalId) {
+      // If currently running, stop it
+      clearInterval(intervalId);
+      intervalId = null;
+      toggleBtn.textContent = '🔄 Start Auto Update';
+      toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+      toggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+      console.log("⏹️ Auto-update stopped.");
+    } else {
+      // If stopped, start it
+      updateLocationsList(); // Update once immediately
+      intervalId = setInterval(updateLocationsList, 5000); // Then update every 5 seconds
+      toggleBtn.textContent = '⏸ Stop Auto Update';
+      toggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+      toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+      console.log("▶️ Auto-update started.");
+    }
+  });
+
+  // Refresh locations list
+  async function updateLocationsList() {
+    try {
+      const res = await fetch('/get_all_locations');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const list = document.getElementById('location-list');
+      list.innerHTML = '';
+      
+      if (data.length === 0) {
+        list.innerHTML = '<p class="text-gray-600">No locations yet.</p>';
+        return;
+      }
+
+      // Generate all list items as a single string and set it
+      list.innerHTML = data.map(loc => `
+        <li class="p-3 bg-white shadow rounded-md flex justify-between items-center transition-colors hover:bg-gray-100">
+          <div>
+            <span class="font-semibold text-gray-800">${parseFloat(loc.lat).toFixed(4)}, ${parseFloat(loc.long).toFixed(4)}</span><br>
+            <span class="text-sm text-gray-500">${new Date(loc.created_at).toLocaleString()}</span>
+          </div>
+          <button class="delete-btn text-red-500 hover:text-red-700 font-bold p-2 rounded-full transition-colors hover:bg-red-100" data-id="${loc.id}">🗑</button>
+        </li>
+      `).join('');
+
+    } catch (err) {
+      console.error("Error updating locations:", err);
+    }
+  }
+
+  // Prepends a single new location to the list without a full refresh
+  function prependLocationToList(loc) {
+    const list = document.getElementById('location-list');
+    const li = document.createElement('li');
+    li.className = "p-3 bg-white shadow rounded-md flex justify-between items-center transition-colors hover:bg-gray-100";
+    li.innerHTML = `
+      <div>
+        <span class="font-semibold text-gray-800">${parseFloat(loc.lat).toFixed(4)}, ${parseFloat(loc.long).toFixed(4)}</span><br>
+        <span class="text-sm text-gray-500">${new Date(loc.created_at).toLocaleString()}</span>
+      </div>
+      <button class="delete-btn text-red-500 hover:text-red-700 font-bold p-2 rounded-full transition-colors hover:bg-red-100" data-id="${loc.id}">🗑</button>
+    `;
+    list.prepend(li);
+  }
+</script>
+{% endblock %}
