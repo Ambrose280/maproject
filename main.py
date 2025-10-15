@@ -6,6 +6,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
 import random
 import string
+from fastapi.encoders import jsonable_encoder
+from datetime import datetime
 from tortoise.contrib.fastapi import register_tortoise
 from models import User, Location
 
@@ -106,9 +108,15 @@ async def get_all_locations(request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         return JSONResponse([], status_code=200)
+
     locations = await Location.filter(user_id=user_id).order_by('-created_at').values(
         "id", "name", "lat", "long", "created_at"
     )
+
+    for loc in locations:
+        if isinstance(loc.get("created_at"), datetime):
+            loc["created_at"] = loc["created_at"].isoformat()
+
     return JSONResponse(locations)
 
 @app.delete("/delete_location/{loc_id}")
