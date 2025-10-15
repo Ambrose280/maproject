@@ -102,7 +102,7 @@
       const j = await res.json();
       prependLocationToList(j.data);
     } else {
-      alert("Failed to save location.");
+      alert("Failed to save location. You need to be logged in.");
     }
     pendingCoords = null;
     document.getElementById('locationName').value = '';
