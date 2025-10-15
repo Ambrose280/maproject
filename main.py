@@ -99,7 +99,7 @@ async def get_latest_location(request: Request):
     if not location:
         return JSONResponse({"message": "No location found"}, status_code=404)
 
-    return JSONResponse({"lat": location.lat, "long": location.long, "created_at": str(location.created_at)})
+    return JSONResponse({"name": location.name, "lat": location.lat, "long": location.long, "created_at": str(location.created_at)})
 
 @app.get("/get_all_locations")
 async def get_all_locations(request: Request):
@@ -109,7 +109,7 @@ async def get_all_locations(request: Request):
     
     locations = await Location.filter(user_id=user_id).order_by("-created_at").limit(20)
     data = [
-        {"lat": loc.lat, "long": loc.long, "created_at": str(loc.created_at)}
+        {"name": loc.name, "lat": loc.lat, "long": loc.long, "created_at": str(loc.created_at)}
         for loc in locations
     ]
     return JSONResponse(data)
@@ -131,12 +131,13 @@ async def delete_location(request: Request, loc_id: int):
     await location.delete()
     return {"status": "deleted"}
 
-
 @app.post("/save_location")
 async def save_location(request: Request):
     data = await request.json()
+
     lat = data.get("lat")
     long = data.get("long")
+    name = data.get("name")
 
     user_id = request.session.get("user_id")
     if not user_id:
@@ -146,15 +147,16 @@ async def save_location(request: Request):
     if not user:
         return JSONResponse({"error": "User not found"}, status_code=404)
 
-    loc = await Location.create(user=user, lat=lat, long=long)
+    loc = await Location.create(user=user, name=name, lat=lat, long=long)
     
-    # Return the data of the newly created location
     new_loc_data = {
-        "id": loc.id, "lat": loc.lat, "long": loc.long, "created_at": str(loc.created_at)
+        "id": loc.id,
+        "name": loc.name,
+        "lat": loc.lat,
+        "long": loc.long,
+        "created_at": str(loc.created_at)
     }
-    
     return JSONResponse({"message": "Location saved", "data": new_loc_data})
-
 # --- Database registration ---
 register_tortoise(
     app,

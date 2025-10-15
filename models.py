@@ -18,6 +18,7 @@ class User(Model):
 
 class Location(Model):
     id = fields.IntField(pk=True)
+    name = fields.CharField(max_length=100, unique=False)
     user = fields.ForeignKeyField("models.User", related_name="locations")
     lat = fields.FloatField()
     long = fields.FloatField()

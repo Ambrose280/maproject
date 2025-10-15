@@ -6,3 +6,5 @@ Request for the other user's location. He/she will
 
 
 routes.html
+
+found similar
