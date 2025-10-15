@@ -26,7 +26,7 @@
         {% for loc in locations %}
           <li class="p-3 bg-white shadow rounded-md flex justify-between items-center transition-colors hover:bg-gray-100">
             <div>
-              <div class="text-sm text-gray-600">{{ loc.name or 'Unnamed' }}</div>
+              <div class="text-sm text-gray-600">{{ loc.name or 'Unnamed' }} </div>
               <div class="font-semibold text-gray-800">{{ "%.4f"|format(loc.lat|float) }}, {{ "%.4f"|format(loc.long|float) }}</div>
               <div class="text-sm text-gray-500">{{ loc.created_at.strftime('%b %d, %Y %I:%M %p') }}</div>
             </div>
@@ -126,29 +126,24 @@
 
   // Fetch all locations
   async function updateLocationsList() {
-    try {
-      const res = await fetch('/get_all_locations');
-      if (!res.ok) return;
-      const data = await res.json();
-      const list = document.getElementById('location-list');
-      if (!data || data.length === 0) {
-        list.innerHTML = '<p class="text-gray-600">No locations yet.</p>';
-        return;
+  try {
+    const res = await fetch('/get_all_locations');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = document.getElementById('location-list');
+
+    // only add new locations, don’t wipe the old ones
+    const existingIds = [...list.querySelectorAll('.delete-btn')].map(btn => btn.dataset.id);
+    for (const loc of data) {
+      if (!existingIds.includes(String(loc.id))) {
+        prependLocationToList(loc);
       }
-      list.innerHTML = data.map(loc => `
-        <li class="p-3 bg-white shadow rounded-md flex justify-between items-center transition-colors hover:bg-gray-100">
-          <div>
-            <div class="text-sm text-gray-600">${loc.name || 'Unnamed'}</div>
-            <div class="font-semibold text-gray-800">${parseFloat(loc.lat).toFixed(4)}, ${parseFloat(loc.long).toFixed(4)}</div>
-            <div class="text-sm text-gray-500">${new Date(loc.created_at).toLocaleString()}</div>
-          </div>
-          <button class="delete-btn text-red-500 hover:text-red-700 font-bold p-2 rounded-full transition-colors hover:bg-red-100" data-id="${loc.id}">🗑</button>
-        </li>
-      `).join('');
-    } catch (err) {
-      console.error(err);
     }
+  } catch (err) {
+    console.error(err);
   }
+}
+
 
   // Add one new item to list
   function prependLocationToList(loc) {

@@ -106,13 +106,10 @@ async def get_all_locations(request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         return JSONResponse([], status_code=200)
-    
-    locations = await Location.filter(user_id=user_id).order_by("-created_at").limit(20)
-    data = [
-        {"name": loc.name, "lat": loc.lat, "long": loc.long, "created_at": str(loc.created_at)}
-        for loc in locations
-    ]
-    return JSONResponse(data)
+    locations = await Location.filter(user_id=user_id).order_by('-created_at').values(
+        "id", "name", "lat", "long", "created_at"
+    )
+    return JSONResponse(locations)
 
 @app.delete("/delete_location/{loc_id}")
 async def delete_location(request: Request, loc_id: int):
