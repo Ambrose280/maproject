@@ -9,7 +9,7 @@ import string
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime
 from tortoise.contrib.fastapi import register_tortoise
-from models import User, Location
+from models import User, Location, Order
 
 # --- Load environment variables ---
 load_dotenv()
@@ -162,11 +162,77 @@ async def save_location(request: Request):
         "created_at": str(loc.created_at)
     }
     return JSONResponse({"message": "Location saved", "data": new_loc_data})
+
+
+@app.get("/order", response_class=HTMLResponse)
+async def order_page(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse("/", status_code=303)
+    
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        return RedirectResponse("/", status_code=303)
+    
+    locations = await Location.filter(user=user)
+    return templates.TemplateResponse("order.html", {"request": request, "locations": locations, "user": user})
+
+@app.post("/place_order")
+async def place_order(request: Request):
+    data = await request.json()
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    
+    cylinder_type = data.get("cylinder_type")
+    quantity = int(data.get("quantity", 1))
+    location_id = data.get("location_id")
+    
+    location = await Location.get_or_none(id=location_id, user_id=user_id)
+    if not location:
+        return JSONResponse({"error": "Invalid location"}, status_code=400)
+    
+    order = await Order.create(
+        user_id=user_id,
+        location=location,
+        cylinder_type=cylinder_type,
+        quantity=quantity
+    )
+    return JSONResponse({"message": "Order placed", "order": jsonable_encoder(order)})
+
+@app.get("/route/{order_id}", response_class=HTMLResponse)
+async def delivery_route(request: Request, order_id: int):
+    order = await Order.get_or_none(id=order_id).prefetch_related("location", "user")
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    customer_location = {
+        "name": order.location.name,
+        "lat": order.location.lat,
+        "long": order.location.long
+    }
+
+    return templates.TemplateResponse(
+        "route.html",
+        {
+            "request": request,
+            "mapbox_token": MAPBOX_TOKEN,
+            "customer_location": customer_location,
+            "order_id": order.id
+        }
+    )
+
+
 # --- Database registration ---
 register_tortoise(
     app,
-    db_url="sqlite://./db.sqlite3",
+    db_url=os.getenv("DATABASE_URL"),
     modules={"models": ["models"]},
     generate_schemas=True,
     add_exception_handlers=True,
 )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

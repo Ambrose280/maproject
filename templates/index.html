@@ -15,7 +15,6 @@
   <!-- Buttons -->
   <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mb-8">
     <button id="locate-btn" class="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow-md hover:bg-blue-700">📍 Show & Save My Location</button>
-    <button id="toggle-auto-btn" class="w-full sm:w-auto bg-green-600 text-white px-5 py-2.5 rounded-lg shadow-md hover:bg-green-700">🔄 Start Auto Update</button>
   </div>
 
   <!-- Locations List -->
@@ -126,24 +125,29 @@
 
   // Fetch all locations
   async function updateLocationsList() {
-  try {
-    const res = await fetch('/get_all_locations');
-    if (!res.ok) return;
-    const data = await res.json();
-    const list = document.getElementById('location-list');
+    try {
+      const res = await fetch('/get_all_locations');
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = document.getElementById('location-list');
 
-    // only add new locations, don’t wipe the old ones
-    const existingIds = [...list.querySelectorAll('.delete-btn')].map(btn => btn.dataset.id);
-    for (const loc of data) {
-      if (!existingIds.includes(String(loc.id))) {
-        prependLocationToList(loc);
+      const currentIds = new Set([...list.querySelectorAll('.delete-btn')].map(b => b.dataset.id));
+      const newIds = new Set(data.map(l => String(l.id)));
+
+      // Remove deleted ones
+      for (const li of [...list.children]) {
+        const id = li.querySelector('.delete-btn')?.dataset.id;
+        if (id && !newIds.has(id)) li.remove();
       }
-    }
-  } catch (err) {
-    console.error(err);
-  }
-}
 
+      // Add new ones
+      for (const loc of data) {
+        if (!currentIds.has(String(loc.id))) prependLocationToList(loc);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   // Add one new item to list
   function prependLocationToList(loc) {
@@ -161,24 +165,9 @@
     list.prepend(li);
   }
 
-  // Auto update
-  let intervalId = null;
-  const toggleBtn = document.getElementById('toggle-auto-btn');
-  toggleBtn.addEventListener('click', e => {
-    e.preventDefault();
-    if (intervalId) {
-      clearInterval(intervalId); intervalId = null;
-      toggleBtn.textContent = '🔄 Start Auto Update';
-      toggleBtn.classList.remove('bg-red-600'); toggleBtn.classList.add('bg-green-600');
-    } else {
-      updateLocationsList();
-      intervalId = setInterval(updateLocationsList, 5000);
-      toggleBtn.textContent = '⏸ Stop Auto Update';
-      toggleBtn.classList.remove('bg-green-600'); toggleBtn.classList.add('bg-red-600');
-    }
-  });
-
-  // Load initial locations
+  // Run auto update forever
   updateLocationsList();
+  setInterval(updateLocationsList, 500);
 </script>
+
 {% endblock %}

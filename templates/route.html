@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Delivery Route | Gas Orders{% endblock %}
+
+{% block content %}
+<div class="text-center py-6">
+  <h1 class="text-2xl font-bold mb-4">🚚 Delivery Route Tracker</h1>
+  <p class="text-gray-600 mb-4">
+    Delivering to: <strong>{{ customer_location.name }}</strong>
+  </p>
+  <div id="map" class="w-full h-96 rounded-lg shadow-md border-2 border-blue-400 mx-auto"></div>
+</div>
+
+<style>
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.3); opacity: 0.4; }
+    100% { transform: scale(1); opacity: 0.8; }
+  }
+
+  .arrival-pulse {
+    border: 3px solid #1e90ff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: pulse 1.5s infinite;
+    background: rgba(30, 144, 255, 0.3);
+  }
+</style>
+
+<script>
+  mapboxgl.accessToken = "{{ mapbox_token }}";
+
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [{{ customer_location.long }}, {{ customer_location.lat }}],
+    zoom: 13
+  });
+
+  // Customer marker
+  const customerMarker = new mapboxgl.Marker({ color: 'red' })
+    .setLngLat([{{ customer_location.long }}, {{ customer_location.lat }}])
+    .setPopup(new mapboxgl.Popup().setText("Customer: {{ customer_location.name }}"))
+    .addTo(map);
+
+  let deliveryMarker = null;
+  let pulseCircle = null;
+
+  // Add an empty GeoJSON route layer
+  map.on('load', () => {
+    map.addSource('route', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: []
+      }
+    });
+
+    map.addLayer({
+      id: 'routeLine',
+      type: 'line',
+      source: 'route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#1e90ff',
+        'line-width': 4,
+        'line-opacity': 0.7
+      }
+    });
+  });
+
+  // Watch and update delivery location
+  function trackDelivery() {
+    if (!navigator.geolocation) {
+      alert("Geolocation not supported in your browser.");
+      return;
+    }
+
+    navigator.geolocation.watchPosition(pos => {
+      const lng = pos.coords.longitude;
+      const lat = pos.coords.latitude;
+
+      // Update or create the delivery marker
+      if (deliveryMarker) {
+        deliveryMarker.setLngLat([lng, lat]);
+      } else {
+        deliveryMarker = new mapboxgl.Marker({ color: 'green' })
+          .setLngLat([lng, lat])
+          .setPopup(new mapboxgl.Popup().setText("You (Deliveryman)"))
+          .addTo(map);
+      }
+
+      // Update route line between deliveryman and customer
+      updateRouteLine([lng, lat], [{{ customer_location.long }}, {{ customer_location.lat }}]);
+
+      // Calculate distance
+      const distance = getDistanceFromLatLonInM(lat, lng, {{ customer_location.lat }}, {{ customer_location.long }});
+      console.log("Distance to customer:", distance.toFixed(1), "m");
+
+      // Trigger pulse when close
+      if (distance <= 100 && !pulseCircle) {
+        const el = document.createElement('div');
+        el.className = 'arrival-pulse';
+        pulseCircle = new mapboxgl.Marker(el)
+          .setLngLat([{{ customer_location.long }}, {{ customer_location.lat }}])
+          .addTo(map);
+        alert("✅ Arrived at customer location!");
+      }
+    }, err => console.error(err), { enableHighAccuracy: true });
+  }
+
+  // Draw line on map
+  function updateRouteLine(start, end) {
+    const routeGeoJSON = {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [start, end]
+        }
+      }]
+    };
+
+    if (map.getSource('route')) {
+      map.getSource('route').setData(routeGeoJSON);
+    }
+  }
+
+  // Distance formula (Haversine)
+  function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  trackDelivery();
+</script>
+{% endblock %}

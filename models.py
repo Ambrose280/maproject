@@ -23,3 +23,12 @@ class Location(Model):
     lat = fields.FloatField()
     long = fields.FloatField()
     created_at = fields.DatetimeField(auto_now_add=True)
+
+class Order(Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="orders")
+    location = fields.ForeignKeyField("models.Location", related_name="orders")
+    cylinder_type = fields.CharField(max_length=50)  # e.g. "Big", "Small"
+    quantity = fields.IntField(default=1)
+    status = fields.CharField(max_length=20, default="Pending")
+    created_at = fields.DatetimeField(auto_now_add=True)
