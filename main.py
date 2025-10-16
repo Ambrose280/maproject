@@ -1,15 +1,16 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
-import random
-import string
+import secrets
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime
 from tortoise.contrib.fastapi import register_tortoise
 from models import User, Location, Order
+from tortoise.exceptions import DoesNotExist
 
 # --- Load environment variables ---
 load_dotenv()
@@ -19,6 +20,15 @@ MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="replace-this-with-a-secure-random-key")
 templates = Jinja2Templates(directory="templates")
+security = HTTPBasic()
+
+async def get_current_user(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    return await User.get_or_none(id=user_id)
+
+
 
 
 # --- Routes ---
@@ -166,34 +176,61 @@ async def save_location(request: Request):
 
 @app.get("/order", response_class=HTMLResponse)
 async def order_page(request: Request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        return RedirectResponse("/", status_code=303)
-    
-    user = await User.get_or_none(id=user_id)
+    user = await get_current_user(request)
     if not user:
         return RedirectResponse("/", status_code=303)
-    
+    if user.delivery:
+        return RedirectResponse("/orders", status_code=303)
+
     locations = await Location.filter(user=user)
     return templates.TemplateResponse("order.html", {"request": request, "locations": locations, "user": user})
+
+
+
+@app.get("/orders", response_class=HTMLResponse)
+async def list_orders(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if not user.delivery:
+        return RedirectResponse("/", status_code=303)
+
+    orders = await Order.all().prefetch_related("location", "user")
+
+    order_data = [
+        {
+            "id": order.id,
+            "customer_name": order.user.username if order.user else "Unknown",
+            "location_name": order.location.name if order.location else "No location",
+        }
+        for order in orders
+    ]
+
+    return templates.TemplateResponse(
+        "orders.html",
+        {"request": request, "orders": order_data, "user": user}
+    )
+
 
 @app.post("/place_order")
 async def place_order(request: Request):
     data = await request.json()
-    user_id = request.session.get("user_id")
-    if not user_id:
+    user = await get_current_user(request)
+    if not user:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if user.delivery:
+        return JSONResponse({"error": "Delivery men cannot place orders"}, status_code=403)
     
     cylinder_type = data.get("cylinder_type")
     quantity = int(data.get("quantity", 1))
     location_id = data.get("location_id")
     
-    location = await Location.get_or_none(id=location_id, user_id=user_id)
+    location = await Location.get_or_none(id=location_id, user_id=user.id)
     if not location:
         return JSONResponse({"error": "Invalid location"}, status_code=400)
     
     order = await Order.create(
-        user_id=user_id,
+        user=user,
         location=location,
         cylinder_type=cylinder_type,
         quantity=quantity
@@ -202,6 +239,12 @@ async def place_order(request: Request):
 
 @app.get("/route/{order_id}", response_class=HTMLResponse)
 async def delivery_route(request: Request, order_id: int):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if not user.delivery:
+        return RedirectResponse("/", status_code=303)
+
     order = await Order.get_or_none(id=order_id).prefetch_related("location", "user")
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -218,16 +261,67 @@ async def delivery_route(request: Request, order_id: int):
             "request": request,
             "mapbox_token": MAPBOX_TOKEN,
             "customer_location": customer_location,
-            "order_id": order.id
+            "order_id": order.id,
+            "user": user
         }
     )
+@app.get("/my-orders", response_class=HTMLResponse)
+async def my_orders(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Please log in first.")
+
+    user = await User.get_or_none(id=user_id).prefetch_related("orders__location")
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Convert order data
+    orders = []
+    for order in user.orders:
+        location_name = getattr(order.location, "name", "No location")
+        orders.append({
+            "id": order.id,
+            "status": getattr(order, "status", "Pending"),
+            "location": location_name,
+            "created_at": order.created_at.strftime("%Y-%m-%d %H:%M"),
+        })
+
+    return templates.TemplateResponse(
+        "my_orders.html",
+        {"request": request, "user": user, "orders": orders},
+    )
+
+@app.get("/test-db")
+async def test_db():
+    user = await User.get(username='IFKLogistics')
+    user.delivery = True
+    await user.save()
+#     # await User.all().delete()
+#     user = User(username='IFKLogistics')
+#     await user.set_password('12345678')
+#     await user.save()
 
 
-# --- Database registration ---
+
+
+TORTOISE_ORM = {
+    "connections": {"default": os.getenv("DATABASE_URL")},
+    "apps": {
+        "models": {
+            "models": ["models", "aerich.models"],
+            "default_connection": "default",
+        },
+    },
+}
+
 register_tortoise(
     app,
-    db_url=os.getenv("DATABASE_URL"),
-    modules={"models": ["models"]},
-    generate_schemas=True,
+    config=TORTOISE_ORM,
     add_exception_handlers=True,
 )
+
+
+# aerich init -t main.TORTOISE_ORM
+# aerich init-db
+# aerich migrate
+# aerich upgrade

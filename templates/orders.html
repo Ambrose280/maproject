@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}All Orders{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col items-center py-10 bg-gray-100">
+
+  <h1 class="text-3xl font-bold mb-8">Orders Overview</h1>
+
+  <div class="w-full max-w-3xl bg-white shadow-md rounded-lg p-6">
+    {% if orders %}
+      <ul class="divide-y divide-gray-200">
+        {% for order in orders %}
+          <li class="py-4 flex items-center justify-between">
+            <div>
+              <p class="text-lg font-semibold text-gray-800">
+                Order #{{ order.id }}
+              </p>
+              <p class="text-sm text-gray-500">
+                Customer: {{ order.customer_name }}<br>
+                Location: {{ order.location_name }}
+              </p>
+            </div>
+            <a href="/route/{{ order.id }}" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg shadow">
+              View Route
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-gray-600 text-center">No orders found.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

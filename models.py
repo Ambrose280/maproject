@@ -7,6 +7,7 @@ class User(Model):
     id = fields.IntField(pk=True)
     username = fields.CharField(max_length=100, unique=True)
     password_hash = fields.CharField(max_length=255)
+    delivery = fields.BooleanField(default=False)
 
     async def set_password(self, plain_password: str):
         hashed = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
