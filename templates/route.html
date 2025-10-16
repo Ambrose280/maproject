@@ -45,15 +45,13 @@
 
   let deliveryMarker = null;
   let pulseCircle = null;
+  let routeFitted = false;
 
-  // Add an empty GeoJSON route layer
+  // Add empty GeoJSON route layer
   map.on('load', () => {
     map.addSource('route', {
       type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: []
-      }
+      data: { type: 'FeatureCollection', features: [] }
     });
 
     map.addLayer({
@@ -69,7 +67,7 @@
     });
   });
 
-  // Watch and update delivery location
+  // Watch & update delivery location
   function trackDelivery() {
     if (!navigator.geolocation) {
       alert("Geolocation not supported in your browser.");
@@ -80,7 +78,7 @@
       const lng = pos.coords.longitude;
       const lat = pos.coords.latitude;
 
-      // Update or create the delivery marker
+      // Create or update delivery marker
       if (deliveryMarker) {
         deliveryMarker.setLngLat([lng, lat]);
       } else {
@@ -90,14 +88,14 @@
           .addTo(map);
       }
 
-      // Update route line between deliveryman and customer
+      // Draw route & auto-fit both markers
       updateRouteLine([lng, lat], [{{ customer_location.long }}, {{ customer_location.lat }}]);
 
-      // Calculate distance
+      // Compute distance
       const distance = getDistanceFromLatLonInM(lat, lng, {{ customer_location.lat }}, {{ customer_location.long }});
       console.log("Distance to customer:", distance.toFixed(1), "m");
 
-      // Trigger pulse when close
+      // Show arrival pulse
       if (distance <= 100 && !pulseCircle) {
         const el = document.createElement('div');
         el.className = 'arrival-pulse';
@@ -109,25 +107,32 @@
     }, err => console.error(err), { enableHighAccuracy: true });
   }
 
-  // Draw line on map
+  // Update route and auto-scale map
   function updateRouteLine(start, end) {
     const routeGeoJSON = {
       type: 'FeatureCollection',
       features: [{
         type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: [start, end]
-        }
+        geometry: { type: 'LineString', coordinates: [start, end] }
       }]
     };
 
     if (map.getSource('route')) {
       map.getSource('route').setData(routeGeoJSON);
     }
+
+    // Automatically fit bounds to both points
+    const bounds = new mapboxgl.LngLatBounds();
+    bounds.extend(start);
+    bounds.extend(end);
+    map.fitBounds(bounds, {
+      padding: 100,
+      maxZoom: 15,
+      duration: 1000
+    });
   }
 
-  // Distance formula (Haversine)
+  // Distance calculation (Haversine formula)
   function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const dLat = (lat2 - lat1) * Math.PI / 180;
