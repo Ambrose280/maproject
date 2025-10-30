@@ -1,21 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Sign Up | Map Project{% endblock %}
+{% block title %}Sign Up | Quasar{% endblock %}
 {% block content %}
-  <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow">
-    <h1 class="text-2xl font-bold mb-4">Sign Up</h1>
-    {% if error %}
-      <p class="text-red-500 mb-3">{{ error }}</p>
-    {% endif %}
-    <form method="post" class="space-y-4">
-      <div>
-        <label class="block text-gray-700">Username</label>
-        <input name="username" class="w-full border rounded p-2" required>
-      </div>
-      <div>
-        <label class="block text-gray-700">Password</label>
-        <input name="password" type="password" class="w-full border rounded p-2" required>
-      </div>
-      <button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">Create Account</button>
-    </form>
+<div class="col-md-6 mx-auto bg-white p-4 rounded shadow-sm">
+  <h3 class="fw-bold mb-3 text-center">Create Account</h3>
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+  <form action="/signup" method="post">
+    <div class="mb-3">
+      <label class="form-label">Username</label>
+      <input type="text" name="username" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Password</label>
+      <input type="password" name="password" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Account Type</label>
+      <select name="user_type" class="form-select" required>
+        <option value="user">Regular User</option>
+        <option value="dispatcher">Dispatcher</option>
+      </select>
+    </div>
+    <button class="btn btn-primary w-100">Sign Up</button>
+  </form>
+  <div class="text-center mt-3">
+    <small>Already have an account? <a href="/login">Log in</a></small>
   </div>
+</div>
 {% endblock %}

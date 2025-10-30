@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Order Details{% endblock %}
+{% block content %}
+<div class="col-md-8 mx-auto bg-white p-4 rounded shadow-sm">
+  <h4 class="fw-bold mb-3">Order Details</h4>
+  <img src="{{ url_for('static', path='uploads/' + order.image) }}" alt="Order Image" class="img-fluid rounded mb-3">
+  <p><strong>Title:</strong> {{ order.title }}</p>
+  <p><strong>Status:</strong> {{ order.status }}</p>
+  <p><strong>Created At:</strong> {{ order.created_at }}</p>
+  <a href="/dashboard" class="btn btn-outline-primary mt-3">Back to Dashboard</a>
+</div>
+{% endblock %}

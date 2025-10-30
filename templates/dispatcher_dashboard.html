@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Dispatcher Dashboard{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h3 class="fw-bold text-primary">Welcome, {{ user.username }}</h3>
+  <div>
+    <label class="form-check-label me-2 fw-semibold">Online Status:</label>
+    <div class="form-check form-switch d-inline">
+      <input class="form-check-input" type="checkbox" id="statusToggle">
+      <label id="statusLabel" class="form-check-label text-secondary">Offline</label>
+    </div>
+  </div>
+</div>
+
+<div class="bg-white p-4 rounded shadow-sm mb-4">
+  <h5 class="fw-bold mb-3">Pending Orders</h5>
+  <ul class="list-group" id="orders-list">
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      Order #1234 — Gas Cylinder (2pcs)
+      <div>
+        <button class="btn btn-success btn-sm">Accept</button>
+        <button class="btn btn-danger btn-sm">Decline</button>
+      </div>
+    </li>
+  </ul>
+</div>
+
+<!-- Dispatcher Map -->
+<div class="bg-white p-3 rounded shadow-sm">
+  <h5 class="fw-bold mb-3">Live Dispatcher Map</h5>
+  <div id="map" style="width: 100%; height: 400px; border-radius: 10px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.1.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken = "{{ MAPBOX_TOKEN }}";
+let map, marker;
+let currentLat = null;
+let currentLng = null;
+let updateInterval = null;
+
+// ---------- INIT MAP ----------
+function initMap() {
+  map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/streets-v12",
+    center: [7.5, 9.0],
+    zoom: 6
+  });
+  map.addControl(new mapboxgl.NavigationControl());
+}
+
+// ---------- ONLINE/OFFLINE TOGGLE ----------
+document.getElementById("statusToggle").addEventListener("change", async () => {
+  const label = document.getElementById("statusLabel");
+  try {
+    const res = await fetch("/dispatcher/toggle_online", { method: "POST" });
+    const data = await res.json();
+    if (data.online) {
+      label.textContent = "Online";
+      label.classList.replace("text-secondary", "text-success");
+      startLocationTracking();
+    } else {
+      label.textContent = "Offline";
+      label.classList.replace("text-success", "text-secondary");
+      stopLocationTracking();
+    }
+  } catch (err) {
+    console.error("Toggle error:", err);
+  }
+});
+
+// ---------- LOCATION TRACKING ----------
+let watchId = null;
+
+function startLocationTracking() {
+  if (!navigator.geolocation) {
+    alert("Geolocation not supported");
+    return;
+  }
+
+  // Update currentLat / currentLng
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      currentLat = pos.coords.latitude;
+      currentLng = pos.coords.longitude;
+      updateMap(currentLat, currentLng);
+    },
+    err => console.error("GPS Error:", err),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+
+  // Send location to backend every 3 seconds
+  updateInterval = setInterval(async () => {
+    if (currentLat && currentLng) {
+      try {
+        await fetch("/dispatcher/update_location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: currentLat, long: currentLng })
+        });
+        console.log("Location sent:", currentLat, currentLng);
+      } catch (err) {
+        console.error("Failed to update location:", err);
+      }
+    }
+  }, 3000);
+}
+
+function stopLocationTracking() {
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  if (updateInterval) {
+    clearInterval(updateInterval);
+    updateInterval = null;
+  }
+}
+
+// ---------- MAP ----------
+function updateMap(lat, lng) {
+  if (!marker) {
+    marker = new mapboxgl.Marker({ color: "green" })
+      .setLngLat([lng, lat])
+      .addTo(map)
+      .setPopup(new mapboxgl.Popup().setText("You (Dispatcher)"));
+    map.flyTo({ center: [lng, lat], zoom: 13 });
+  } else {
+    const old = marker.getLngLat();
+    marker.setLngLat([
+      old.lng + (lng - old.lng) * 0.5,
+      old.lat + (lat - old.lat) * 0.5
+    ]);
+    map.flyTo({ center: [lng, lat], zoom: 13, speed: 0.8, curve: 1.4 });
+  }
+}
+
+document.addEventListener("DOMContentLoaded", initMap);
+</script>
+{% endblock %}
