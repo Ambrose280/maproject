@@ -1,8 +1,10 @@
 fastapi
 uvicorn[standard]
-python-dotenv
 tortoise-orm
-passlib[bcrypt]
-aiofiles
 aerich
+python-dotenv
+jinja2
+cloudinary
 python-multipart
+bcrypt
+aiofiles

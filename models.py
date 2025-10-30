@@ -2,7 +2,7 @@ from tortoise import fields
 from tortoise.models import Model
 import bcrypt
 from datetime import datetime, timedelta
-
+import uuid
 
 class User(Model):
     id = fields.IntField(pk=True)
@@ -24,7 +24,6 @@ class User(Model):
     def __str__(self):
         return f"{self.username} ({self.user_type})"
 
-
 class Location(Model):
     id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="locations", on_delete=fields.CASCADE)
@@ -39,37 +38,50 @@ class Location(Model):
 
 class Order(Model):
     id = fields.IntField(pk=True)
-    user = fields.ForeignKeyField("models.User", related_name="orders", on_delete=fields.CASCADE)
-    location = fields.ForeignKeyField("models.Location", related_name="orders", null=True, on_delete=fields.SET_NULL)
-    title = fields.CharField(max_length=200, null=True)
-    image_path = fields.CharField(max_length=255, null=True)
-    cylinder_type = fields.CharField(max_length=50, null=True)
+    title = fields.CharField(255)
+    image_path = fields.TextField(null=True)
     quantity = fields.IntField(default=1)
-    status = fields.CharField(max_length=20, default="Pending")  # Pending / Accepted / Declined / In Transit / Delivered
-    dispatcher = fields.ForeignKeyField("models.User", related_name="assigned_orders", null=True, on_delete=fields.SET_NULL)
+    status = fields.CharField(50, default="pending")
+    location = fields.ForeignKeyField("models.Location", related_name="orders", null=True)
+    user = fields.ForeignKeyField("models.User", related_name="orders")
+    code = fields.CharField(50, unique=True, default="")
     created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
 
-    def __str__(self):
-        return f"Order #{self.id} - {self.status}"
+    async def generate_share_code(self):
+        self.code = str(uuid.uuid4()).split('-')[0].upper()
+        await self.save()
+        share = await OrderShareCode.create(order=self, code=self.code)
+        return share
 
+class OrderShareCode(Model):
+    """Unique share link that someone can open to accept an order"""
+    id = fields.IntField(pk=True)
+    order = fields.ForeignKeyField("models.Order", related_name="share_codes")
+    code = fields.CharField(100, unique=True)
+    accepted = fields.BooleanField(default=False)
+    accepted_by = fields.ForeignKeyField("models.User", related_name="accepted_orders", null=True)
+    accepted_lat = fields.FloatField(null=True)
+    accepted_long = fields.FloatField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
 
 class DispatcherStatus(Model):
-    """
-    Live dispatcher status for map display and online/offline toggling.
-    """
     id = fields.IntField(pk=True)
     dispatcher = fields.ForeignKeyField("models.User", related_name="status", unique=True, on_delete=fields.CASCADE)
     online = fields.BooleanField(default=False)
     lat = fields.FloatField(null=True)
     long = fields.FloatField(null=True)
-    color = fields.CharField(max_length=20, null=True)  # map pulse color
+    color = fields.CharField(max_length=20, null=True)
     last_seen = fields.DatetimeField(auto_now=True)
 
     @property
     def expired(self):
-        """Session expires if last seen > 10 seconds ago"""
-        return datetime.utcnow() - self.last_seen.replace(tzinfo=None) > timedelta(seconds=10)
+        return datetime.utcnow() - self.last_seen.replace(tzinfo=None) > timedelta(seconds=60)
 
     def __str__(self):
         return f"{self.dispatcher.username} ({'Online' if self.online else 'Offline'})"
+
+class Dispatch(Model):
+    id = fields.IntField(pk=True)
+    order = fields.ForeignKeyField("models.Order", related_name="dispatches")
+    status = fields.CharField(50, default="enroute")
+    created_at = fields.DatetimeField(auto_now_add=True)

@@ -1,9 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Welcome | Quasar{% endblock %}
+{% block title %}Home{% endblock %}
 {% block content %}
-<div class="text-center">
-  <h1 class="fw-bold mb-3">Welcome to Quasar Logistics</h1>
-  <p class="lead text-muted">Connecting users and dispatchers in real time.</p>
-  <a href="/signup" class="btn btn-primary btn-lg mt-3">Get Started</a>
+<div class="max-w-3xl mx-auto bg-white rounded shadow p-6">
+  <h1 class="text-2xl font-semibold mb-3">Quasar Logistics</h1>
+  <p class="text-slate-600">Sign up as a user to place orders or as a dispatcher to accept deliveries.</p>
+  <div class="mt-4 space-x-3">
+    <a href="/signup" class="px-4 py-2 bg-sky-600 text-white rounded">Get started</a>
+    <a href="/login" class="px-4 py-2 border rounded">Login</a>
+  </div>
 </div>
 {% endblock %}

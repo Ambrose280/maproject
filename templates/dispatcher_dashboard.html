@@ -1,214 +1,123 @@
 {% extends "base.html" %}
 {% block title %}Dispatcher Dashboard{% endblock %}
-
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h3 class="fw-bold text-primary">Welcome, {{ user.username }}</h3>
-  <div>
-    <label class="form-check-label me-2 fw-semibold">Online Status:</label>
-    <div class="form-check form-switch d-inline">
-      <input class="form-check-input" type="checkbox" id="statusToggle">
-      <label id="statusLabel" class="form-check-label text-secondary">Offline</label>
-    </div>
+<h2 class="text-xl font-semibold mb-4">Hello, {{ user.username }}</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="col-span-1 md:col-span-2 map-box">
+    <div id="map" style="width:100%;height:100%"></div>
   </div>
 </div>
 
-<div class="bg-white p-4 rounded shadow-sm mb-4">
-  <h5 class="fw-bold mb-3">Pending Orders</h5>
-  <ul class="list-group" id="orders-list">
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-      Order #1234 — Gas Cylinder (2pcs)
-      <div>
-        <button class="btn btn-success btn-sm">Accept</button>
-        <button class="btn btn-danger btn-sm">Decline</button>
-      </div>
-    </li>
-  </ul>
+<nav class="flex gap-2 mt-4 mb-3">
+  <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="orders">Orders</button>
+  <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="maptab">Live Map</button>
+  <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="profile">Profile</button>
+</nav>
+
+<div id="tab-orders" class="tab-scroll bg-white p-4 rounded shadow hidden">
+  <ul id="orders-list" class="space-y-3"></ul>
 </div>
 
-<!-- Dispatcher Map -->
-<div class="bg-white p-3 rounded shadow-sm">
-  <h5 class="fw-bold mb-3">Live Dispatcher Map</h5>
-  <div id="map" style="width: 100%; height: 400px; border-radius: 10px;"></div>
+<div id="tab-maptab" class="tab-scroll bg-white p-4 rounded shadow hidden">
+  <p class="text-sm text-slate-600">Your toggles and controls are in Profile tab. Map auto-updates dispatchers.</p>
 </div>
 
-<!-- Dispatcher List -->
-<div class="bg-white p-3 rounded shadow-sm mt-4">
-  <h5 class="fw-bold mb-3">Online Dispatchers</h5>
-  <ul id="dispatchers-list" class="list-group"></ul>
+<div id="tab-profile" class="tab-scroll bg-white p-4 rounded shadow hidden">
+  <div class="flex items-center gap-4">
+    <label class="text-sm">Online</label>
+    <input id="statusToggle" type="checkbox" class="h-5 w-10" />
+    <div id="statusLabel" class="text-sm text-slate-500">Offline</div>
+  </div>
+  <p class="text-sm text-slate-500 mt-3" id="last-sync">Last sync: never</p>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.1.0/mapbox-gl.js"></script>
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.1.0/mapbox-gl.css" rel="stylesheet" />
-
 <script>
 mapboxgl.accessToken = "{{ MAPBOX_TOKEN }}";
+const map = new mapboxgl.Map({ container:'map', style:'mapbox://styles/mapbox/streets-v12', center:[7.5,9.0], zoom:6 });
+map.addControl(new mapboxgl.NavigationControl());
 
-let map, userMarker = null, watchId = null;
-const dispatcherMarkers = {};
-let dispatcherData = {};
-
-// --- Initialize Map ---
-function initMap() {
-  map = new mapboxgl.Map({
-    container: "map",
-    style: "mapbox://styles/mapbox/streets-v12",
-    center: [7.5, 9.0],
-    zoom: 6
+/* tabs */
+document.querySelectorAll('.tab-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('#tab-orders,#tab-maptab,#tab-profile').forEach(el=>el.classList.add('hidden'));
+    document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');
   });
-  map.addControl(new mapboxgl.NavigationControl());
-}
-document.addEventListener("DOMContentLoaded", initMap);
+});
+/* default open orders */
+document.querySelector('.tab-btn').click();
 
-// --- Time ago function ---
-function timeAgo(timestamp) {
-  const now = new Date();
-  const then = new Date(timestamp);
-  const diff = Math.floor((now - then) / 1000);
-  if (diff < 10) return "just now";
-  if (diff < 60) return `updated ${diff} seconds ago`;
-  if (diff < 3600) return `updated ${Math.floor(diff / 60)} minutes ago`;
-  return `updated ${Math.floor(diff / 3600)} hours ago`;
-}
-
-// --- Update timestamps every second ---
-setInterval(() => {
-  for (const id in dispatcherData) {
-    const d = dispatcherData[id];
-    const timeEl = document.getElementById(`time-${id}`);
-    if (timeEl) timeEl.textContent = timeAgo(d.last_seen);
-  }
-}, 1000);
-
-// --- Toggle Online Status ---
-document.getElementById("statusToggle").addEventListener("change", async e => {
-  const label = document.getElementById("statusLabel");
-  try {
-    const res = await fetch("/dispatcher/toggle_online", { method: "POST" });
-    const data = await res.json();
-    if (data.online) {
-      label.textContent = "Online";
-      label.classList.replace("text-secondary", "text-success");
-      startLocationTracking();
-    } else {
-      label.textContent = "Offline";
-      label.classList.replace("text-success", "text-secondary");
-      stopLocationTracking();
-    }
-  } catch (err) { console.error(err); }
+/* toggle online */
+document.getElementById('statusToggle').addEventListener('change', async (e)=>{
+  try{
+    const res = await fetch('/dispatcher/toggle_online', { method: 'POST' });
+    const j = await res.json();
+    if(j.online){ document.getElementById('statusLabel').innerText = 'Online'; startTracking(); } else { document.getElementById('statusLabel').innerText = 'Offline'; stopTracking(); }
+  }catch(err){ console.error(err); }
 });
 
-// --- Location Tracking ---
-function startLocationTracking() {
-  if (navigator.geolocation) {
-    watchId = navigator.geolocation.watchPosition(async pos => {
-      const { latitude, longitude } = pos.coords;
-
-      // Update own location every 3 seconds
-      await fetch("/dispatcher/update_location", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat: latitude, long: longitude })
-      });
-
-      // Update own marker
-      if (!userMarker) {
-        userMarker = new mapboxgl.Marker({ color: "green" })
-          .setLngLat([longitude, latitude])
-          .setPopup(new mapboxgl.Popup().setText("You are here"))
-          .addTo(map);
-      } else {
-        userMarker.setLngLat([longitude, latitude]);
-      }
-
-    }, null, { maximumAge: 0, enableHighAccuracy: true, timeout: 5000 });
-  }
+/* tracking */
+let locationInterval = null;
+function startTracking(){
+  if(!navigator.geolocation) return alert('Geolocation unsupported');
+  navigator.geolocation.getCurrentPosition(sendPos);
+  locationInterval = setInterval(()=> navigator.geolocation.getCurrentPosition(sendPos), 3000);
+}
+function stopTracking(){ if(locationInterval){ clearInterval(locationInterval); locationInterval=null; } }
+async function sendPos(pos){
+  const lat = pos.coords.latitude, long = pos.coords.longitude;
+  document.getElementById('last-sync').innerText = 'Last sync: ' + new Date().toLocaleTimeString();
+  try{ await fetch('/dispatcher/update_location', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat,long}) }); }catch(e){ console.error(e); }
+  if(!window.userMarker){ window.userMarker = new mapboxgl.Marker({ color: 'green' }).setLngLat([long,lat]).addTo(map); } else { window.userMarker.setLngLat([long,lat]); }
 }
 
-function stopLocationTracking() {
-  if (watchId) navigator.geolocation.clearWatch(watchId);
-}
-
-// --- Fetch All Dispatchers ---
-async function fetchDispatchers() {
-  try {
-    const res = await fetch("/api/dispatchers");
-    if (!res.ok) throw new Error("Failed to fetch dispatchers");
+/* orders poll */
+async function fetchOrders(){
+  try{
+    const res = await fetch('/api/orders');
+    if(!res.ok) return;
     const data = await res.json();
-
-    dispatcherData = {};
-    const listEl = document.getElementById("dispatchers-list");
-    listEl.innerHTML = "";
-    const bounds = new mapboxgl.LngLatBounds();
-    const validCoords = [];
-
-    // Include your own location
-    if (userMarker) {
-      const lngLat = userMarker.getLngLat();
-      validCoords.push([lngLat.lng, lngLat.lat]);
+    const list = document.getElementById('orders-list'); list.innerHTML = '';
+    for(const o of data){
+      const li = document.createElement('li'); li.className = 'p-3 border rounded flex justify-between items-center';
+      li.innerHTML = `<div><b>Order #${o.id}</b><div class="text-sm text-slate-500">${o.title}</div></div><div class="space-x-2"><button class="px-3 py-1 bg-green-600 text-white rounded" onclick="accept(${o.id})">Accept</button><button class="px-3 py-1 bg-red-600 text-white rounded" onclick="decline(${o.id})">Decline</button><button class="px-3 py-1 border rounded" onclick="window.open('/track/${o.code}','_blank')">Track</button></div>`;
+      list.appendChild(li);
     }
-
-    for (const d of data) {
-      if (!d.lat || !d.long || isNaN(d.lat) || isNaN(d.long)) continue;
-      dispatcherData[d.id] = d;
-      validCoords.push([d.long, d.lat]);
-
-      // Smooth marker update
-      if (dispatcherMarkers[d.id]) {
-        const marker = dispatcherMarkers[d.id];
-        const old = marker.getLngLat();
-        marker.setLngLat([
-          old.lng + (d.long - old.lng) * 0.5,
-          old.lat + (d.lat - old.lat) * 0.5
-        ]);
-      } else {
-        const el = document.createElement("div");
-        el.className = "pulse";
-        el.style.backgroundColor = d.color || "#007bff";
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat([d.long, d.lat])
-          .setPopup(new mapboxgl.Popup().setText(d.username))
-          .addTo(map);
-        dispatcherMarkers[d.id] = marker;
-      }
-
-      // Add to dispatcher list
-      const li = document.createElement("li");
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <span>
-          <span class="me-2" style="width:12px;height:12px;border-radius:50%;background:${d.color}"></span>
-          ${d.username}
-        </span>
-        <small class="text-muted" id="time-${d.id}">${timeAgo(d.last_seen)}</small>
-      `;
-      listEl.appendChild(li);
-    }
-
-    // Remove offline markers
-    Object.keys(dispatcherMarkers).forEach(id => {
-      if (!data.some(d => d.id === parseInt(id))) {
-        dispatcherMarkers[id].remove();
-        delete dispatcherMarkers[id];
-      }
-    });
-
-    // Adjust map to fit all valid coordinates
-    if (validCoords.length > 0) {
-      validCoords.forEach(c => bounds.extend(c));
-      map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 1000 });
-    }
-
-  } catch (err) {
-    console.error("Failed to fetch dispatchers:", err);
-  }
+  }catch(e){ console.error(e); }
 }
+window.accept = async (id)=>{ await fetch('/dispatcher/accept_order/'+id, { method:'POST' }); fetchOrders(); };
+window.decline = async (id)=>{ await fetch('/dispatcher/decline_order/'+id, { method:'POST' }); fetchOrders(); };
 
-// --- Poll every 3 seconds ---
+setInterval(fetchOrders,3000);
+fetchOrders();
+
+/* show other dispatchers on map */
+const dispatcherMarkers = {};
+async function fetchDispatchers(){
+  try{
+    const res = await fetch('/api/dispatchers');
+    if(!res.ok) return;
+    const data = await res.json();
+    const bounds = new mapboxgl.LngLatBounds();
+    const coords = [];
+    for(const d of data){
+      if(!d.lat || !d.long) continue;
+      coords.push([d.long,d.lat]); bounds.extend([d.long,d.lat]);
+      if(dispatcherMarkers[d.id]) {
+        const m = dispatcherMarkers[d.id]; const old = m.getLngLat();
+        m.setLngLat([ old.lng + (d.long - old.lng) * 0.5, old.lat + (d.lat - old.lat) * 0.5 ]);
+      } else {
+        const el = document.createElement('div'); el.className='pulse'; el.style.background = d.color || '#0ea5e9';
+        const m = new mapboxgl.Marker(el).setLngLat([d.long, d.lat]).setPopup(new mapboxgl.Popup().setText(d.username)).addTo(map);
+        dispatcherMarkers[d.id] = m;
+      }
+    }
+    if(coords.length) map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 });
+  }catch(e){ console.error(e); }
+}
 setInterval(fetchDispatchers, 3000);
 fetchDispatchers();
-
 </script>
 {% endblock %}

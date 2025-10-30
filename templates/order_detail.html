@@ -1,12 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Order Details{% endblock %}
+{% block title %}Order #{{ order.id }}{% endblock %}
 {% block content %}
-<div class="col-md-8 mx-auto bg-white p-4 rounded shadow-sm">
-  <h4 class="fw-bold mb-3">Order Details</h4>
-  <img src="{{ url_for('static', path='uploads/' + order.image) }}" alt="Order Image" class="img-fluid rounded mb-3">
-  <p><strong>Title:</strong> {{ order.title }}</p>
-  <p><strong>Status:</strong> {{ order.status }}</p>
-  <p><strong>Created At:</strong> {{ order.created_at }}</p>
-  <a href="/dashboard" class="btn btn-outline-primary mt-3">Back to Dashboard</a>
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-8">
+  <h2 class="text-2xl font-bold mb-2 text-slate-800">Order #{{ order.id }}</h2>
+  <p class="text-sm text-slate-500 mb-4">
+    Status: <span class="font-semibold">{{ order.status|capitalize }}</span>
+  </p>
+
+  {% if order.image_path %}
+    <div class="mb-4">
+      <img src="{{ order.image_path }}" alt="Order Image" class="rounded-lg w-full object-cover" />
+    </div>
+  {% endif %}
+
+  <div class="mb-3">
+    <p class="text-sm text-slate-600">
+      Pickup Location:
+      <span class="font-medium">{{ order.location.name if order.location else 'Unknown' }}</span>
+    </p>
+  </div>
+
+  {% if share.accepted %}
+    <div class="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-lg mt-4">
+      ✅ This order has already been <strong>accepted</strong>.
+    </div>
+  {% else %}
+    <div class="mt-5">
+      <button id="acceptBtn"
+              class="w-full sm:w-auto px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition">
+        Accept This Order
+      </button>
+    </div>
+  {% endif %}
 </div>
+
+<script>
+document.getElementById('acceptBtn')?.addEventListener('click', async () => {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by your browser.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async position => {
+    const lat = position.coords.latitude;
+    const long = position.coords.longitude;
+
+    const res = await fetch('/share/{{ share.code }}/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, long })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert('✅ ' + (data.message || 'Order accepted successfully!'));
+      location.reload();
+    } else {
+      alert('⚠️ ' + (data.detail || data.error || 'Unable to accept order.'));
+    }
+  }, err => {
+    alert('Could not get your location: ' + err.message);
+  });
+});
+</script>
 {% endblock %}

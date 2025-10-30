@@ -1,81 +1,91 @@
 {% extends "base.html" %}
 {% block title %}User Dashboard{% endblock %}
-
-{% block head %}
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.1.0/mapbox-gl.js"></script>
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.1.0/mapbox-gl.css" rel="stylesheet" />
-
-<style>
-  .map-container {
-    width: 100%;
-    max-width: 600px;
-    aspect-ratio: 1 / 1;
-    margin: 0 auto;
-    border-radius: 1rem;
-    background: #fff;
-    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    border: 1px solid #dee2e6;
-  }
-
-  #map {
-    width: 100%;
-    height: 100%;
-  }
-
-  .pulse {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    position: relative;
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4);
-    }
-    70% {
-      box-shadow: 0 0 0 15px rgba(0, 123, 255, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
-    }
-  }
-</style>
-{% endblock %}
-
 {% block content %}
-<h3 class="fw-bold mb-4 text-primary">Welcome, {{ user }}</h3>
+<h2 class="text-xl font-semibold mb-4">Welcome, {{ user.username if user else 'Guest' }}</h2>
 
-<!-- Square Map Box -->
-<div class="map-container mb-4">
-  <div id="map"></div>
+<div class="map-box mb-4 rounded overflow-hidden" style="height:300px">
+  <div id="map" class="w-full h-full"></div>
 </div>
 
 <!-- Tabs -->
-<ul class="nav nav-tabs mt-4" id="userTabs" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#share">📍 Share Location</button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dispatchers">🧭 Dispatchers</button>
-  </li>
-</ul>
+<div>
+  <nav class="flex space-x-2 mb-3">
+    <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="share">📍 Share Location</button>
+    <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="orders">📦 Orders</button>
+    <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="dispatchers">🚴 Dispatchers</button>
+  </nav>
 
-<!-- Tab Content -->
-<div class="tab-content mt-3">
-  <!-- Share Location -->
-  <div class="tab-pane fade show active" id="share">
-    <p class="text-muted">Click to share your live location.</p>
-    <button id="share-location" class="btn btn-success">Share My Location</button>
-    <div id="coords" class="mt-3"></div>
+  <!-- Share Tab -->
+  <div id="tab-share" class="tab-content bg-white p-4 rounded shadow">
+    <p class="text-sm text-slate-600">Click to get your current location and save it with a name.</p>
+    <button id="share-location" class="px-3 py-2 bg-green-600 text-white rounded mt-2">Get current location</button>
+    <div id="coords" class="mt-3 text-sm text-slate-700"></div>
+
+    <h4 class="mt-4 font-semibold">Saved Locations</h4>
+    <ul id="saved-locations" class="space-y-2 tab-scroll"></ul>
+    <!-- .tab-scroll is defined in base.css: max-height + overflow-y -->
+
+    <!-- Save Modal -->
+    <div id="saveModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div class="bg-white p-5 rounded w-96 shadow-lg">
+        <h3 class="font-semibold text-lg mb-2">Save location</h3>
+        <form id="saveLocForm" class="space-y-3">
+          <input type="hidden" name="lat" id="loc-lat">
+          <input type="hidden" name="long" id="loc-long">
+          <div>
+            <label class="block text-sm font-medium">Location Name</label>
+            <input name="name" id="loc-name" class="w-full border rounded px-2 py-1" placeholder="e.g. Home, Office" required />
+          </div>
+          <div class="flex justify-end space-x-2">
+            <button type="button" id="saveCancel" class="px-3 py-1 border rounded">Cancel</button>
+            <button type="submit" class="px-3 py-1 bg-sky-600 text-white rounded">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
-  <!-- Dispatchers List -->
-  <div class="tab-pane fade" id="dispatchers">
-    <ul id="dispatchers-list" class="list-group"></ul>
+  <!-- Orders Tab -->
+  <div id="tab-orders" class="tab-content hidden bg-white p-4 rounded shadow">
+    <div class="flex justify-between items-center mb-3">
+      <h4 class="font-semibold text-lg">My Orders</h4>
+      <button id="openOrderModal" class="px-3 py-2 bg-sky-600 text-white rounded">+ Create Order</button>
+    </div>
+    <div id="orders-area" class="tab-scroll"></div>
+
+    <!-- Order Modal -->
+    <div id="orderModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div class="bg-white p-5 rounded w-96 shadow-lg">
+        <h3 class="font-semibold text-lg mb-2">Place an Order</h3>
+        <form id="placeOrderForm" enctype="multipart/form-data" class="space-y-3">
+          <input name="title" placeholder="Title" required class="w-full border rounded p-2" />
+          <select name="location_id" id="locationSelect" class="w-full border rounded p-2"></select>
+          <input type="file" name="image" accept="image/*" required />
+          <input type="number" name="quantity" value="1" min="1" class="w-24 border rounded p-2" />
+          <div class="flex justify-end space-x-2">
+            <button type="button" id="cancelOrderModal" class="px-3 py-1 border rounded">Cancel</button>
+            <button class="px-3 py-1 bg-sky-600 text-white rounded">Place</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Share Link Modal (shows generated link & copy button; needed for iOS) -->
+    <div id="shareLinkModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div class="bg-white p-5 rounded w-96 shadow-lg">
+        <h3 class="font-semibold text-lg mb-2">Share Link</h3>
+        <p id="shareLinkText" class="break-all text-sm mb-4"></p>
+        <div class="flex justify-end space-x-2">
+          <button id="copyShareLink" class="px-3 py-1 bg-sky-600 text-white rounded">Copy</button>
+          <button id="closeShareLink" class="px-3 py-1 border rounded">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dispatchers Tab -->
+  <div id="tab-dispatchers" class="tab-content hidden bg-white p-4 rounded shadow">
+    <ul id="dispatchers-list" class="space-y-2 tab-scroll"></ul>
   </div>
 </div>
 {% endblock %}
@@ -84,128 +94,234 @@
 <script>
 mapboxgl.accessToken = "{{ MAPBOX_TOKEN }}";
 const map = new mapboxgl.Map({
-  container: "map",
-  style: "mapbox://styles/mapbox/streets-v12",
-  center: [3.3792, 6.5244],
-  zoom: 12
+  container: 'map',
+  style: 'mapbox://styles/mapbox/streets-v12',
+  center: [3.3792,6.5244],
+  zoom: 11
 });
 map.addControl(new mapboxgl.NavigationControl());
 
-const dispatcherMarkers = {};
-let dispatcherData = {};
-
-function timeAgo(timestamp) {
-  const now = new Date();
-  const then = new Date(timestamp);
-  const diff = Math.floor((now - then) / 1000);
-  if (diff < 10) return "just now";
-  if (diff < 60) return `updated ${diff} seconds ago`;
-  if (diff < 3600) return `updated ${Math.floor(diff / 60)} minutes ago`;
-  return `updated ${Math.floor(diff / 3600)} hours ago`;
+/* orders tab */
+async function loadMyOrders(){
+  const res = await fetch('/my_orders_json');
+  const area = document.getElementById('orders-area');
+  area.innerHTML = '';
+  if(!res.ok) return;
+  const data = await res.json();
+  if(data.length === 0){
+    area.innerHTML = '<p>No orders yet</p>';
+    return;
+  }
+  for(const o of data){
+    const div = document.createElement('div');
+    div.className = 'p-3 border rounded mb-2';
+    div.innerHTML = `
+      <div class="flex justify-between items-center">
+        <div>
+          <b>${o.title}</b><br>
+          <small class="text-slate-500">Status: ${o.status}</small>
+        </div>
+        <div class="space-x-2">
+          <button onclick="generateShareLink(${o.id})" class="px-3 py-1 border rounded text-sky-600">🔗 Share Link</button>
+        </div>
+      </div>`;
+    area.appendChild(div);
+  }
 }
 
-// Live timestamp refresh
-setInterval(() => {
-  for (const id in dispatcherData) {
-    const d = dispatcherData[id];
-    const timeEl = document.getElementById(`time-${id}`);
-    if (timeEl) timeEl.textContent = timeAgo(d.last_seen);
+/* copy helper with fallback for iOS / older browsers */
+async function copyToClipboard(text){
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    // fallback using textarea + execCommand
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'absolute';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    } catch (e) {
+      document.body.removeChild(ta);
+      return false;
+    }
   }
-}, 1000);
+}
 
-map.on("load", () => {
-  fetchDispatchers();
-  setInterval(fetchDispatchers, 5000);
+async function generateShareLink(orderId){
+  const res = await fetch('/generate_share_link/' + orderId, { method: 'POST' });
+  if(!res.ok) return alert('Error generating link');
+  const j = await res.json();
+  if(j.link){
+    // show modal with link (better UX on iOS)
+    const modal = document.getElementById('shareLinkModal');
+    const textEl = document.getElementById('shareLinkText');
+    textEl.textContent = j.link;
+    modal.classList.remove('hidden');
+
+    // attach copy handler (one-off)
+    const copyBtn = document.getElementById('copyShareLink');
+    const onCopy = async () => {
+      const ok = await copyToClipboard(j.link);
+      if(ok){
+        copyBtn.textContent = 'Copied';
+        setTimeout(()=> copyBtn.textContent = 'Copy', 2000);
+      } else {
+        alert('Copy failed — please long-press the link to copy on iOS');
+      }
+    };
+    copyBtn.removeEventListener('click', onCopy);
+    copyBtn.addEventListener('click', onCopy);
+
+    document.getElementById('closeShareLink').onclick = () => modal.classList.add('hidden');
+    // allow clicking backdrop to close
+    modal.addEventListener('click', (ev) => {
+      if(ev.target === modal) modal.classList.add('hidden');
+    }, { once: true });
+  } else {
+    alert('Error generating link');
+  }
+}
+
+loadMyOrders();
+
+/* Tabs with active color */
+const tabBtns = document.querySelectorAll('.tab-btn');
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    tabBtns.forEach(b => b.classList.remove('bg-sky-600','text-white'));
+    btn.classList.add('bg-sky-600','text-white');
+
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById('tab-' + tab).classList.remove('hidden');
+  });
+});
+tabBtns[0].click(); // default active
+
+/* Share Location */
+document.getElementById('share-location').addEventListener('click', ()=> {
+  if(!navigator.geolocation) return alert('Geolocation unsupported');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat = pos.coords.latitude, long = pos.coords.longitude;
+    document.getElementById('coords').innerText = `Lat: ${lat.toFixed(6)}, Lng: ${long.toFixed(6)}`;
+    document.getElementById('loc-lat').value = lat;
+    document.getElementById('loc-long').value = long;
+    document.getElementById('saveModal').classList.remove('hidden');
+    map.flyTo({ center: [long, lat], zoom: 14 });
+    if (!window.userMarker) {
+      window.userMarker = new mapboxgl.Marker({ color: '#16a34a' }).setLngLat([long, lat]).addTo(map);
+    } else {
+      window.userMarker.setLngLat([long, lat]);
+    }
+  }, err => alert('Unable to get location'));
+});
+document.getElementById('saveCancel').addEventListener('click', ()=> document.getElementById('saveModal').classList.add('hidden'));
+
+/* Load saved locations */
+async function loadLocations(){
+  const res = await fetch('/get_all_locations');
+  const sel = document.getElementById('locationSelect');
+  sel.innerHTML = '';
+  const list = document.getElementById('saved-locations');
+  list.innerHTML = '';
+  if(!res.ok) return;
+  const data = await res.json();
+  for(const loc of data){
+    // For order select
+    const o = document.createElement('option');
+    o.value = loc.id;
+    o.textContent = `${loc.name || 'Saved'} — ${new Date(loc.created_at).toLocaleString()}`;
+    sel.appendChild(o);
+
+    // For saved locations list
+    const li = document.createElement('li');
+    li.className = 'flex justify-between items-center p-2 border rounded';
+    li.innerHTML = `<span>${loc.name || 'Saved'} — ${new Date(loc.created_at).toLocaleString()}</span>
+      <button class="text-red-600 font-bold" onclick="deleteLocation(${loc.id})">&times;</button>`;
+    list.appendChild(li);
+  }
+}
+loadLocations();
+
+/* Delete location */
+async function deleteLocation(id){
+  if(!confirm('Delete this location?')) return;
+  const res = await fetch(`/delete_location/${id}`, { method: 'DELETE' });
+  if(res.ok) loadLocations();
+}
+
+/* Save location */
+document.getElementById('saveLocForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch('/save_location', { method: 'POST', body: fd });
+  const j = await res.json();
+  if(j.id){
+    document.getElementById('saveModal').classList.add('hidden');
+    loadLocations();
+  }
 });
 
-async function fetchDispatchers() {
-  try {
-    const res = await fetch("/api/dispatchers");
-    if (!res.ok) throw new Error("Failed to fetch dispatchers");
+/* Order modal controls */
+document.getElementById('openOrderModal').addEventListener('click', ()=> document.getElementById('orderModal').classList.remove('hidden'));
+document.getElementById('cancelOrderModal').addEventListener('click', ()=> document.getElementById('orderModal').classList.add('hidden'));
+
+/* Place order */
+document.getElementById('placeOrderForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch('/place_order', { method: 'POST', body: fd });
+  const j = await res.json();
+  if(j.order_id){
+    document.getElementById('orderModal').classList.add('hidden');
+    loadMyOrders();
+  }
+});
+
+
+/* Dispatchers */
+const dispatcherMarkers = {};
+async function fetchDispatchers(){
+  try{
+    const res = await fetch('/api/dispatchers');
+    if(!res.ok) return;
     const data = await res.json();
-
+    const list = document.getElementById('dispatchers-list');
+    list.innerHTML = '';
     const bounds = new mapboxgl.LngLatBounds();
-    const listEl = document.getElementById("dispatchers-list");
-
-    for (const d of data) {
-      if (!d.lat || !d.long || isNaN(d.lat) || isNaN(d.long)) continue;
-      const coords = [d.long, d.lat];
-      dispatcherData[d.id] = d;
-      bounds.extend(coords);
-
-      // Marker update / creation
-      if (dispatcherMarkers[d.id]) {
-        const marker = dispatcherMarkers[d.id];
-        const old = marker.getLngLat();
-        const newLng = old.lng + (coords[0] - old.lng) * 0.5;
-        const newLat = old.lat + (coords[1] - old.lat) * 0.5;
-        marker.setLngLat([newLng, newLat]);
+    const coords = [];
+    for(const d of data){
+      if(!d.lat || !d.long) continue;
+      coords.push([d.long, d.lat]);
+      bounds.extend([d.long, d.lat]);
+      if(dispatcherMarkers[d.id]){
+        dispatcherMarkers[d.id].setLngLat([d.long, d.lat]);
       } else {
-        const el = document.createElement("div");
-        el.className = "pulse";
-        el.style.backgroundColor = d.color || "#007bff";
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat(coords)
+        const el = document.createElement('div');
+        el.className = 'pulse';
+        el.style.background = d.color || '#0ea5e9';
+        dispatcherMarkers[d.id] = new mapboxgl.Marker(el)
+          .setLngLat([d.long, d.lat])
           .setPopup(new mapboxgl.Popup().setText(d.username))
           .addTo(map);
-        dispatcherMarkers[d.id] = marker;
       }
-
-      // Update or create list entry
-      let li = document.getElementById(`dispatcher-${d.id}`);
-      if (!li) {
-        li = document.createElement("li");
-        li.id = `dispatcher-${d.id}`;
-        li.className = "list-group-item d-flex align-items-center justify-content-between";
-        listEl.appendChild(li);
-      }
-      li.innerHTML = `
-        <span>
-          <span class="me-2" style="width:12px;height:12px;border-radius:50%;background:${d.color || "#007bff"}"></span>
-          ${d.username}
-        </span>
-        <small class="text-muted" id="time-${d.id}">${timeAgo(d.last_seen)}</small>
-      `;
+      const li = document.createElement('li');
+      li.className = 'p-2 border rounded flex justify-between';
+      li.innerHTML = `<div><span class="inline-block w-3 h-3 rounded-full mr-2" style="background:${d.color}"></span>${d.username}</div>
+        <div class="text-xs text-slate-500">${new Date(d.last_seen).toLocaleTimeString()}</div>`;
+      list.appendChild(li);
     }
-
-    // Remove offline dispatchers (no longer returned)
-    Object.keys(dispatcherMarkers).forEach(id => {
-      if (!data.some(d => d.id === parseInt(id))) {
-        dispatcherMarkers[id].remove();
-        delete dispatcherMarkers[id];
-        delete dispatcherData[id];
-        const li = document.getElementById(`dispatcher-${id}`);
-        if (li) li.remove();
-      }
-    });
-
-    // Adjust map bounds
-    if (data.length > 1) {
-      map.fitBounds(bounds, { padding: 50, duration: 1000 });
-    } else if (data.length === 1) {
-      map.flyTo({ center: [data[0].long, data[0].lat], zoom: 14, speed: 0.8, curve: 1.4 });
-    }
-
-  } catch (err) {
-    console.error("Dispatcher update failed:", err);
-  }
+    if(coords.length) map.fitBounds(bounds, { padding: 40, maxZoom: 15 });
+  }catch(err){ console.error(err); }
 }
-
-// Share Live Location
-document.getElementById("share-location").onclick = () => {
-  if (!navigator.geolocation) return alert("Geolocation not supported");
-  navigator.geolocation.getCurrentPosition(pos => {
-    const { latitude, longitude } = pos.coords;
-    document.getElementById("coords").innerText =
-      `Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}`;
-
-    const userMarker = new mapboxgl.Marker({ color: "#28a745" })
-      .setLngLat([longitude, latitude])
-      .addTo(map)
-      .setPopup(new mapboxgl.Popup().setText("You are here"));
-
-    map.flyTo({ center: [longitude, latitude], zoom: 14, speed: 0.8, curve: 1.4 });
-  });
-};
+fetchDispatchers();
+setInterval(fetchDispatchers, 4000);
 </script>
 {% endblock %}
