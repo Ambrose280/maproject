@@ -51,6 +51,27 @@
 </div>
 {% endblock %}
 
+{% block head %}
+<style>
+/* pulsing marker style (local to this page) */
+@keyframes demo-pulse {
+  0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(0,0,0,0.12); }
+  60% { transform: scale(1.08); opacity: 0.85; box-shadow: 0 0 0 10px rgba(0,0,0,0); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+}
+.pulse-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-sizing: border-box;
+  animation: demo-pulse 2000ms infinite;
+  display: block;
+  cursor: pointer;
+}
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
 mapboxgl.accessToken = "{{ MAPBOX_TOKEN }}";
@@ -182,5 +203,67 @@ async function fetchDispatchers(){
 }
 fetchDispatchers();
 setInterval(fetchDispatchers, 4000);
+
+/* Hardcoded demo points */
+const now_iso = new Date().toISOString();
+const demoDispatchers = [
+  {"id":1001,"first_name":"Ubong","last_name":"Jones","email":"ubong.jones@example.com","phone":"+2348012345678","lat":5.0321533867828725,"long":7.9411077353157085,"color":"#e6194b","last_seen":now_iso},
+  {"id":1002,"first_name":"Unwana","last_name":"Ambrose","email":"unwana.ambrose@example.com","phone":"+2348098765432","lat":5.015993712106818,"long":7.9289197784636825,"color":"#3cb44b","last_seen":now_iso},
+  {"id":1003,"first_name":"Ifiok","last_name":"Ambrose","email":"ifiok.ambrose@example.com","phone":"+2348071122334","lat":5.011504842537115,"long":7.957029326837196,"color":"#4363d8","last_seen":now_iso}
+];
+
+const markers = {};
+const listEl = document.getElementById('dispatchers-list');
+
+function renderDemoMarkers() {
+  try { map.resize(); } catch(e) {}
+  listEl.innerHTML = '';
+  const bounds = new mapboxgl.LngLatBounds();
+
+  for (const d of demoDispatchers) {
+    if (typeof d.long !== 'number' || typeof d.lat !== 'number') continue;
+    const coord = [d.long, d.lat];
+    bounds.extend(coord);
+
+    // marker element
+    const el = document.createElement('div');
+    el.className = 'pulse-marker';
+    el.style.background = d.color || '#16a34a';
+    el.style.zIndex = 10;
+
+    // ensure marker is centered exactly at the coordinate
+    if (!markers[d.id]) {
+      markers[d.id] = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat(coord)
+        .setPopup(new mapboxgl.Popup({ offset: 12 }).setHTML(`<strong>${(d.first_name + ' ' + d.last_name).trim()}</strong><div class="text-xs">${d.phone}</div>`))
+        .addTo(map);
+    } else {
+      markers[d.id].setLngLat(coord);
+    }
+
+    // list entry
+    const li = document.createElement('li');
+    li.className = 'p-2 border rounded flex justify-between items-center';
+    li.innerHTML = `<div><strong>${(d.first_name + ' ' + d.last_name).trim()}</strong><div class="text-xs text-slate-500">${d.phone}</div></div><div class="text-xs text-slate-500">${new Date(d.last_seen).toLocaleTimeString()}</div>`;
+    listEl.appendChild(li);
+  }
+
+  // ensure layout then fit bounds
+  try { map.resize(); } catch(e) {}
+  const validCount = demoDispatchers.filter(d => typeof d.long === 'number' && typeof d.lat === 'number').length;
+  if (validCount === 1) {
+    const p = demoDispatchers.find(d => typeof d.long === 'number' && typeof d.lat === 'number');
+    map.easeTo({ center: [p.long, p.lat], zoom: 14, duration: 600 });
+  } else if (validCount > 1) {
+    map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 });
+  }
+}
+
+// render after map ready
+if (map.loaded()) {
+  renderDemoMarkers();
+} else {
+  map.on('load', renderDemoMarkers);
+}
 </script>
 {% endblock %}
