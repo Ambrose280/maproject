@@ -146,7 +146,8 @@ document.getElementById('saveLocForm').addEventListener('submit', async (e)=>{
 const dispatcherMarkers = {};
 async function fetchDispatchers(){
   try{
-    const res = await fetch('/api/dispatchers');
+    // use demo endpoint for the hard-coded demo list
+    const res = await fetch('/demo/dispatchers');
     if(!res.ok) return;
     const data = await res.json();
     const list = document.getElementById('dispatchers-list');

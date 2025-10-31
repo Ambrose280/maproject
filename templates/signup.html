@@ -1,30 +1,40 @@
-{% extends "base.html" %}
-{% block title %}Sign Up{% endblock %}
-{% block content %}
-<div class="max-w-xl mx-auto bg-white rounded shadow p-6">
-  <h2 class="text-xl font-semibold mb-3">Create an account</h2>
-  {% if error %}
-    <div class="mb-3 p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
-  {% endif %}
-  <form method="post" action="/signup" class="space-y-3">
-    <div>
-      <label class="block text-sm">Username</label>
-      <input name="username" required class="w-full border rounded px-3 py-2" />
-    </div>
-    <div>
-      <label class="block text-sm">Password</label>
-      <input name="password" type="password" required class="w-full border rounded px-3 py-2" />
-    </div>
-    <div>
-      <label class="block text-sm">Account type</label>
-      <select name="user_type" class="w-full border rounded px-3 py-2">
+<!doctype html>
+<html>
+<head>
+  <title>Sign up</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-slate-50">
+  <div class="w-full max-w-md bg-white p-6 rounded shadow">
+    <h2 class="text-xl font-semibold mb-4">Sign up</h2>
+    {% if error %}<div class="text-red-600 mb-3">{{ error }}</div>{% endif %}
+    <form method="post" action="/signup">
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <label class="block mb-1 text-sm">First name</label>
+          <input name="first_name" type="text" class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block mb-1 text-sm">Last name</label>
+          <input name="last_name" type="text" class="w-full border rounded p-2" />
+        </div>
+      </div>
+      <label class="block mb-2 text-sm">Email</label>
+      <input name="email" type="email" required class="w-full border rounded p-2 mb-3" />
+      <label class="block mb-2 text-sm">Phone (optional)</label>
+      <input name="phone" type="tel" class="w-full border rounded p-2 mb-3" />
+      <label class="block mb-2 text-sm">Password</label>
+      <input name="password" type="password" required class="w-full border rounded p-2 mb-3" />
+      <label class="block mb-2 text-sm">Account type</label>
+      <select name="user_type" class="w-full border rounded p-2 mb-4">
         <option value="user">User</option>
         <option value="dispatcher">Dispatcher</option>
       </select>
-    </div>
-    <div>
-      <button class="px-4 py-2 bg-sky-600 text-white rounded">Create account</button>
-    </div>
-  </form>
-</div>
-{% endblock %}
+      <div class="flex justify-end">
+        <button class="px-4 py-2 bg-sky-600 text-white rounded">Sign up</button>
+      </div>
+    </form>
+    <p class="text-sm mt-3">Already have an account? <a href="/login" class="text-sky-600">Login</a></p>
+  </div>
+</body>
+</html>

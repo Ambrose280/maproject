@@ -11,28 +11,61 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.0/mapbox-gl.css" rel="stylesheet" />
 
   <style>
-    /* All UI-level styling here to keep pages clean */
-    :root { --footer-height: 44px; } /* slimmer footer */
-    html,body,#app { height: 100%; }
-    /* footer sits in normal flow and will only be visible when scrolled to bottom */
+    /* Light green site-wide theme variables */
+    :root{
+      --primary-50: #f0fdf4;
+      --primary-100: #dcfce7;
+      --primary-500: #16a34a;
+      --primary-600: #15803d;
+      --primary-700: #166534;
+      --primary-text: #14532d;
+      --footer-height: 44px;
+    }
+
+    html, body, #app { height: 100%; }
+
+    /* Footer kept in normal flow, tinted to match theme */
     .sticky-footer {
-      position: static; /* not fixed — footer will be below content */
+      position: static;
       width: 100%;
-      background: #0f172a;
+      background: var(--primary-700);
+      color: #e6ffee;
       min-height: var(--footer-height);
       box-sizing: border-box;
     }
-    /* no extra bottom padding needed when footer is not fixed */
-    #app { padding-bottom: 0; }
-    /* reduce inner spacing in footer so it appears slimmer */
     .sticky-footer .container { padding: 6px 0; }
-    .tab-scroll { max-height: 420px; overflow-y: auto; }
-    .map-box { width: 100%; max-width: 720px; aspect-ratio: 1/1; margin: 0 auto; border-radius: 0.75rem; overflow: hidden; border: 1px solid #e6e6e6; }
-    .pulse { width: 16px; height: 16px; border-radius: 50%; animation: pulse 2s infinite; }
+
+    /* Utility overrides to swap Tailwind "sky" utilities to green theme */
+    .bg-sky-700 { background-color: var(--primary-700) !important; }
+    .bg-sky-600 { background-color: var(--primary-600) !important; }
+    .bg-sky-50  { background-color: var(--primary-50) !important; }
+    .text-sky-600 { color: var(--primary-600) !important; }
+    .text-sky-700 { color: var(--primary-700) !important; }
+    .hover\\:bg-sky-700:hover { background-color: var(--primary-700) !important; }
+    .hover\\:bg-sky-600:hover { background-color: var(--primary-600) !important; }
+    .border-sky-600 { border-color: var(--primary-600) !important; }
+
+    /* Buttons that used sky styling will now appear green */
+    .btn-primary, .bg-sky-600, button[class*="bg-sky-600"] { color: #ffffff !important; }
+
+    /* Page-level components */
+    .tab-scroll { max-height: 420px; overflow-y: auto; border: 1px solid rgba(21,128,61,0.06); border-radius: .5rem; }
+    .map-box { width: 100%; max-width: 720px; aspect-ratio: 1/1; margin: 0 auto; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(21,128,61,0.12); background: linear-gradient(180deg, #fff, var(--primary-50)); }
+    .pulse { width: 16px; height: 16px; border-radius: 50%; animation: pulse 2s infinite; box-shadow: 0 0 0 0 rgba(21,128,61,0.25); }
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(0,0,0,0.2); }
-      70% { box-shadow: 0 0 0 15px rgba(0,0,0,0); }
-      100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+      0% { box-shadow: 0 0 0 0 rgba(21,128,61,0.25); transform: scale(1); }
+      70% { box-shadow: 0 0 0 12px rgba(21,128,61,0); transform: scale(1.05); }
+      100% { box-shadow: 0 0 0 0 rgba(21,128,61,0); transform: scale(1); }
+    }
+
+    /* Links & small accents */
+    a { color: var(--primary-600); }
+    a:hover { color: var(--primary-700); text-decoration: none; }
+
+    /* Make form focus outlines align with theme */
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid rgba(22,163,74,0.18);
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.06);
     }
   </style>
 
@@ -45,7 +78,7 @@
       <a href="/" class="font-semibold text-lg">Team TRAX</a>
       <div class="space-x-3">
         {% if user %}
-          <a href="{{ '/' if user.user_type=='user' else '/dispatcher/dashboard' }}" class="hover:underline">Dashboard</a>
+          <a href="{{ '/' if user.user_type == 'user' else '/dispatcher/dashboard' }}" class="hover:underline">Dashboard</a>
           <a href="/logout" class="hover:underline">Logout</a>
         {% else %}
           <a href="/login" class="hover:underline">Login</a>

@@ -6,7 +6,10 @@ import uuid
 
 class User(Model):
     id = fields.IntField(pk=True)
-    username = fields.CharField(max_length=100, unique=True)
+    email = fields.CharField(max_length=254, unique=True)
+    phone = fields.CharField(max_length=20, null=True)
+    first_name = fields.CharField(max_length=100, null=True)
+    last_name = fields.CharField(max_length=100, null=True)
     password_hash = fields.CharField(max_length=255)
     user_type = fields.CharField(max_length=20, default="user")  # "user" or "dispatcher"
     created_at = fields.DatetimeField(auto_now_add=True)
@@ -22,7 +25,8 @@ class User(Model):
         return bcrypt.checkpw(safe_pw, self.password_hash.encode("utf-8"))
 
     def __str__(self):
-        return f"{self.username} ({self.user_type})"
+        name = f"{self.first_name or ''} {self.last_name or ''}".strip()
+        return f"{name or self.email} ({self.user_type})"
 
 class Location(Model):
     id = fields.IntField(pk=True)
@@ -35,34 +39,6 @@ class Location(Model):
     def __str__(self):
         return f"{self.name or 'Unnamed'} ({self.lat}, {self.long})"
 
-
-class Order(Model):
-    id = fields.IntField(pk=True)
-    title = fields.CharField(255)
-    image_path = fields.TextField(null=True)
-    quantity = fields.IntField(default=1)
-    status = fields.CharField(50, default="pending")
-    location = fields.ForeignKeyField("models.Location", related_name="orders", null=True)
-    user = fields.ForeignKeyField("models.User", related_name="orders")
-    code = fields.CharField(50, unique=True, default="")
-    created_at = fields.DatetimeField(auto_now_add=True)
-
-    async def generate_share_code(self):
-        self.code = str(uuid.uuid4()).split('-')[0].upper()
-        await self.save()
-        share = await OrderShareCode.create(order=self, code=self.code)
-        return share
-
-class OrderShareCode(Model):
-    """Unique share link that someone can open to accept an order"""
-    id = fields.IntField(pk=True)
-    order = fields.ForeignKeyField("models.Order", related_name="share_codes")
-    code = fields.CharField(100, unique=True)
-    accepted = fields.BooleanField(default=False)
-    accepted_by = fields.ForeignKeyField("models.User", related_name="accepted_orders", null=True)
-    accepted_lat = fields.FloatField(null=True)
-    accepted_long = fields.FloatField(null=True)
-    created_at = fields.DatetimeField(auto_now_add=True)
 
 class DispatcherStatus(Model):
     id = fields.IntField(pk=True)
@@ -78,10 +54,5 @@ class DispatcherStatus(Model):
         return datetime.utcnow() - self.last_seen.replace(tzinfo=None) > timedelta(seconds=60)
 
     def __str__(self):
-        return f"{self.dispatcher.username} ({'Online' if self.online else 'Offline'})"
+        return f"{self.dispatcher.email} ({'Online' if self.online else 'Offline'})"
 
-class Dispatch(Model):
-    id = fields.IntField(pk=True)
-    order = fields.ForeignKeyField("models.Order", related_name="dispatches")
-    status = fields.CharField(50, default="enroute")
-    created_at = fields.DatetimeField(auto_now_add=True)

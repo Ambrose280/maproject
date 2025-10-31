@@ -1,12 +1,98 @@
 {% extends "base.html" %}
 {% block title %}Home{% endblock %}
 {% block content %}
-<div class="max-w-3xl mx-auto bg-white rounded shadow p-6">
-  <h1 class="text-2xl font-semibold mb-3">Quasar Logistics</h1>
-  <p class="text-slate-600">Sign up as a user to place orders or as a dispatcher to accept deliveries.</p>
-  <div class="mt-4 space-x-3">
-    <a href="/signup" class="px-4 py-2 bg-sky-600 text-white rounded">Get started</a>
-    <a href="/login" class="px-4 py-2 border rounded">Login</a>
+<section class="max-w-6xl mx-auto py-12 px-4">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+    <!-- Hero -->
+    <div>
+      <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight mb-4">TRAX Logistics</h1>
+      <p class="text-slate-600 text-lg mb-6">
+        Connect riders and customers instantly. Dispatchers broadcast live locations and availability — customers find and request deliveries with a single tap.
+      </p>
+
+      <div class="flex flex-wrap gap-3 mb-6">
+        <a href="/signup" class="px-5 py-3 bg-sky-600 text-white rounded-lg shadow hover:bg-sky-700">Get started</a>
+        <a href="/demo/dashboard" class="px-5 py-3 border rounded-lg hover:bg-slate-50">Try demo</a>
+        <a href="/login" class="px-5 py-3 text-slate-700 rounded-lg hover:bg-slate-50">Login</a>
+      </div>
+
+      <ul class="space-y-3 text-sm text-slate-600">
+        <li class="flex items-start gap-3">
+          <span class="inline-flex items-center justify-center w-8 h-8 bg-sky-50 text-sky-600 rounded-full font-semibold">1</span>
+          Real-time location sharing so customers see nearby dispatchers instantly.
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="inline-flex items-center justify-center w-8 h-8 bg-sky-50 text-sky-600 rounded-full font-semibold">2</span>
+          Simple request flow — customers request a dispatcher for an accepted order, dispatchers accept or decline.
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="inline-flex items-center justify-center w-8 h-8 bg-sky-50 text-sky-600 rounded-full font-semibold">3</span>
+          Built for mobile and desktop — works well on iOS/Android and modern browsers.
+        </li>
+      </ul>
+    </div>
+
+    <!-- Visual / feature card -->
+    <div class="bg-white rounded-xl shadow-lg p-5">
+      <div class="h-56 rounded-md overflow-hidden mb-4 bg-gradient-to-br from-sky-100 to-white flex items-center justify-center">
+        <!-- Map placeholder (renders nicely when map is present on dashboards) -->
+        <div class="text-slate-500 text-center">
+          <svg class="mx-auto mb-2" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 10c0 7-9 12-9 12S3 17 3 10a9 9 0 1118 0z" stroke-width="1.5"/>
+            <circle cx="12" cy="10" r="2.5" stroke-width="1.5"/>
+          </svg>
+          <div class="font-medium">Live dispatcher map</div>
+          <div class="text-xs text-slate-400">See riders nearby and their contact info</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-3">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center font-semibold">●</div>
+          <div>
+            <div class="font-semibold">For Dispatchers</div>
+            <div class="text-sm text-slate-600">Set online/offline, share live location, receive requests from customers.</div>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center font-semibold">✓</div>
+          <div>
+            <div class="font-semibold">For Customers</div>
+            <div class="text-sm text-slate-600">Save locations, request dispatch, track deliveries in real time.</div>
+          </div>
+        </div>
+
+        <div class="text-sm text-slate-500">
+          <strong>Privacy:</strong> Locations are shared only when dispatchers go online. Phone numbers are shown to facilitate contact.
+        </div>
+      </div>
+    </div>
   </div>
-</div>
+
+  <!-- How it works -->
+  <div class="mt-12 bg-white rounded-lg shadow p-6">
+    <h3 class="text-xl font-semibold mb-3">How it works</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div>
+        <div class="font-semibold mb-1">1. Dispatchers share location</div>
+        <div class="text-sm text-slate-600">Riders toggle online and their live position appears on the map.</div>
+      </div>
+      <div>
+        <div class="font-semibold mb-1">2. Customers request dispatch</div>
+        <div class="text-sm text-slate-600">Choose an accepted order and request a nearby dispatcher to pick it up.</div>
+      </div>
+      <div>
+        <div class="font-semibold mb-1">3. Track & confirm</div>
+        <div class="text-sm text-slate-600">Dispatcher accepts request, customer tracks the rider until delivery is done.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer CTA -->
+  <div class="mt-8 text-center">
+    <p class="text-sm text-slate-500 mb-3">Ready to connect riders with customers?</p>
+    <a href="/signup" class="inline-block px-6 py-3 bg-sky-600 text-white rounded-lg shadow hover:bg-sky-700">Create account — it's free</a>
+  </div>
+</section>
 {% endblock %}

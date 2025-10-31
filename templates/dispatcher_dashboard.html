@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Dispatcher Dashboard{% endblock %}
 {% block content %}
-<h2 class="text-xl font-semibold mb-4">Hello, {{ user.username }}</h2>
+<h2 class="text-xl font-semibold mb-4">Hello, {{ user.email }}</h2>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
   <div class="col-span-1 md:col-span-2 map-box">
@@ -105,12 +105,14 @@ async function fetchDispatchers(){
     for(const d of data){
       if(!d.lat || !d.long) continue;
       coords.push([d.long,d.lat]); bounds.extend([d.long,d.lat]);
+      const displayName = ((d.first_name || '') + ' ' + (d.last_name || '')).trim() || d.email;
+      const contact = d.phone ? ` • ${d.phone}` : '';
       if(dispatcherMarkers[d.id]) {
         const m = dispatcherMarkers[d.id]; const old = m.getLngLat();
         m.setLngLat([ old.lng + (d.long - old.lng) * 0.5, old.lat + (d.lat - old.lat) * 0.5 ]);
       } else {
         const el = document.createElement('div'); el.className='pulse'; el.style.background = d.color || '#0ea5e9';
-        const m = new mapboxgl.Marker(el).setLngLat([d.long, d.lat]).setPopup(new mapboxgl.Popup().setText(d.username)).addTo(map);
+        const m = new mapboxgl.Marker(el).setLngLat([d.long, d.lat]).setPopup(new mapboxgl.Popup().setText(displayName + contact)).addTo(map);
         dispatcherMarkers[d.id] = m;
       }
     }
