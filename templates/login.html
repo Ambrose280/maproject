@@ -4,26 +4,41 @@
   <title>Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-slate-50">
-  <div class="w-full max-w-2xl bg-white p-10 rounded-xl shadow-lg">
-    <h2 class="text-3xl font-semibold mb-6 text-primary-text">Login</h2>
-    {% if error %}<div class="text-red-600 mb-4">{{ error }}</div>{% endif %}
-    <form method="post" action="/login" class="space-y-6">
-      <div>
-        <label class="block mb-2 text-sm font-medium text-primary-text">Email</label>
-        <input name="email" type="email" required class="w-full border rounded-lg px-4 py-3 text-lg" />
-      </div>
+<body>
+  {% extends "base.html" %}
+  {% block title %}Login{% endblock %}
 
-      <div>
-        <label class="block mb-2 text-sm font-medium text-primary-text">Password</label>
-        <input name="password" type="password" required class="w-full border rounded-lg px-4 py-3 text-lg" />
-      </div>
+  {% block content %}
+  <div class="min-h-screen flex items-center justify-center py-6 px-4 bg-slate-50">
+    <div class="w-full max-w-sm sm:max-w-md bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+      <h2 class="text-2xl sm:text-3xl font-semibold mb-4 text-primary-text text-center">Login</h2>
 
-      <div class="flex justify-between items-center">
-        <a href="/signup" class="text-sm text-green-600 hover:underline">Create an account</a>
-        <button class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-lg shadow">Login</button>
-      </div>
-    </form>
+      {% if error %}
+        <div class="text-red-600 mb-4">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/login" class="space-y-4">
+        <div>
+          <label for="email" class="sr-only">Email</label>
+          <input id="email" name="email" type="email" required placeholder="you@example.com"
+                 class="w-full border rounded-lg px-4 py-3 text-base sm:text-lg focus:outline-none focus:ring-2 focus:ring-green-200" />
+        </div>
+
+        <div>
+          <label for="password" class="sr-only">Password</label>
+          <input id="password" name="password" type="password" required placeholder="Password"
+                 class="w-full border rounded-lg px-4 py-3 text-base sm:text-lg focus:outline-none focus:ring-2 focus:ring-green-200" />
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <a href="/signup" class="text-sm text-green-600 hover:underline">Create an account</a>
+          <button class="w-full sm:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-base sm:text-lg shadow">
+            Login
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
+  {% endblock %}
 </body>
 </html>
