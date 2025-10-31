@@ -5,19 +5,25 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-slate-50">
-  <div class="w-full max-w-md bg-white p-6 rounded shadow">
-    <h2 class="text-xl font-semibold mb-4">Login</h2>
-    {% if error %}<div class="text-red-600 mb-3">{{ error }}</div>{% endif %}
-    <form method="post" action="/login">
-      <label class="block mb-2 text-sm">Email</label>
-      <input name="email" type="email" required class="w-full border rounded p-2 mb-3" />
-      <label class="block mb-2 text-sm">Password</label>
-      <input name="password" type="password" required class="w-full border rounded p-2 mb-4" />
-      <div class="flex justify-end">
-        <button class="px-4 py-2 bg-sky-600 text-white rounded">Login</button>
+  <div class="w-full max-w-2xl bg-white p-10 rounded-xl shadow-lg">
+    <h2 class="text-3xl font-semibold mb-6 text-primary-text">Login</h2>
+    {% if error %}<div class="text-red-600 mb-4">{{ error }}</div>{% endif %}
+    <form method="post" action="/login" class="space-y-6">
+      <div>
+        <label class="block mb-2 text-sm font-medium text-primary-text">Email</label>
+        <input name="email" type="email" required class="w-full border rounded-lg px-4 py-3 text-lg" />
+      </div>
+
+      <div>
+        <label class="block mb-2 text-sm font-medium text-primary-text">Password</label>
+        <input name="password" type="password" required class="w-full border rounded-lg px-4 py-3 text-lg" />
+      </div>
+
+      <div class="flex justify-between items-center">
+        <a href="/signup" class="text-sm text-green-600 hover:underline">Create an account</a>
+        <button class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-lg shadow">Login</button>
       </div>
     </form>
-    <p class="text-sm mt-3">Don't have an account? <a href="/signup" class="text-sky-600">Sign up</a></p>
   </div>
 </body>
 </html>
