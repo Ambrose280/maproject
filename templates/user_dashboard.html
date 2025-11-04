@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block title %}User Dashboard{% endblock %}
+
 {% block content %}
 <h2 class="text-xl font-semibold mb-4">Welcome, {{ user.email if user else 'Guest' }}</h2>
 
+<!-- Map -->
 <div class="map-box mb-4 rounded overflow-hidden" style="height:300px">
   <div id="map" class="w-full h-full"></div>
 </div>
@@ -14,7 +16,7 @@
     <button class="tab-btn px-3 py-2 bg-white rounded shadow" data-tab="dispatchers">🚴 Dispatchers</button>
   </nav>
 
-  <!-- Share Tab -->
+  <!-- Share Location Tab -->
   <div id="tab-share" class="tab-content bg-white p-4 rounded shadow">
     <p class="text-sm text-slate-600">Click to get your current location and save it with a name.</p>
     <button id="share-location" class="px-3 py-2 bg-green-600 text-white rounded mt-2">Get current location</button>
@@ -22,9 +24,8 @@
 
     <h4 class="mt-4 font-semibold">Saved Locations</h4>
     <ul id="saved-locations" class="space-y-2 tab-scroll"></ul>
-    <!-- .tab-scroll is defined in base.css: max-height + overflow-y -->
 
-    <!-- Save Modal -->
+    <!-- Save Location Modal -->
     <div id="saveModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div class="bg-white p-5 rounded w-96 shadow-lg">
         <h3 class="font-semibold text-lg mb-2">Save location</h3>
@@ -52,31 +53,46 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+/* Pulse marker animation */
+.pulse {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: relative;
+  animation: pulse 1.8s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(14,165,233, 0.6); }
+  70% { box-shadow: 0 0 0 15px rgba(14,165,233, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(14,165,233, 0); }
+}
+</style>
+
 <script>
 mapboxgl.accessToken = "{{ MAPBOX_TOKEN }}";
 const map = new mapboxgl.Map({
   container: 'map',
   style: 'mapbox://styles/mapbox/streets-v12',
-  center: [3.3792,6.5244],
+  center: [3.3792, 6.5244],
   zoom: 11
 });
 map.addControl(new mapboxgl.NavigationControl());
 
-/* Tabs with active color */
+/* Tabs setup */
 const tabBtns = document.querySelectorAll('.tab-btn');
 tabBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     tabBtns.forEach(b => b.classList.remove('bg-sky-600','text-white'));
     btn.classList.add('bg-sky-600','text-white');
-
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     document.getElementById('tab-' + tab).classList.remove('hidden');
   });
 });
-tabBtns[0].click(); // default active
+tabBtns[0].click(); // Default tab
 
-/* Share Location */
+/* Share location */
 document.getElementById('share-location').addEventListener('click', ()=> {
   if(!navigator.geolocation) return alert('Geolocation unsupported');
   navigator.geolocation.getCurrentPosition(pos=>{
@@ -98,22 +114,11 @@ document.getElementById('saveCancel').addEventListener('click', ()=> document.ge
 /* Load saved locations */
 async function loadLocations(){
   const res = await fetch('/get_all_locations');
-  const sel = document.getElementById('locationSelect');
-  if(sel) sel.innerHTML = '';
   const list = document.getElementById('saved-locations');
   list.innerHTML = '';
   if(!res.ok) return;
   const data = await res.json();
   for(const loc of data){
-    // For order select (if present elsewhere)
-    if(sel){
-      const o = document.createElement('option');
-      o.value = loc.id;
-      o.textContent = `${loc.name || 'Saved'} — ${new Date(loc.created_at).toLocaleString()}`;
-      sel.appendChild(o);
-    }
-
-    // For saved locations list
     const li = document.createElement('li');
     li.className = 'flex justify-between items-center p-2 border rounded';
     li.innerHTML = `<span>${loc.name || 'Saved'} — ${new Date(loc.created_at).toLocaleString()}</span>
@@ -142,40 +147,50 @@ document.getElementById('saveLocForm').addEventListener('submit', async (e)=>{
   }
 });
 
-/* Dispatchers */
+/* Dispatcher markers */
 const dispatcherMarkers = {};
 async function fetchDispatchers(){
   try{
     const res = await fetch('/api/dispatchers');
     if(!res.ok) return;
     const data = await res.json();
+    console.log('Dispatcher data:', data);
     const list = document.getElementById('dispatchers-list');
     list.innerHTML = '';
     const bounds = new mapboxgl.LngLatBounds();
     const coords = [];
+
     for(const d of data){
-      if(!d.lat || !d.long) continue;
-      coords.push([d.long, d.lat]);
-      bounds.extend([d.long, d.lat]);
+      const lat = parseFloat(d.lat);
+      const long = parseFloat(d.long);
+
+      if(isNaN(lat) || isNaN(long)) continue;
+
+      coords.push([long, lat]);
+      bounds.extend([long, lat]);
+
       const displayName = ((d.first_name || '') + ' ' + (d.last_name || '')).trim() || d.email;
       const contact = d.phone ? ` • ${d.phone}` : '';
+
       if(dispatcherMarkers[d.id]){
-        dispatcherMarkers[d.id].setLngLat([d.long, d.lat]);
+        dispatcherMarkers[d.id].setLngLat([long, lat]);
       } else {
         const el = document.createElement('div');
         el.className = 'pulse';
         el.style.background = d.color || '#0ea5e9';
         dispatcherMarkers[d.id] = new mapboxgl.Marker(el)
-          .setLngLat([d.long, d.lat])
+          .setLngLat([long, lat])
           .setPopup(new mapboxgl.Popup().setText(displayName + contact))
           .addTo(map);
       }
+
       const li = document.createElement('li');
       li.className = 'p-2 border rounded flex justify-between';
       li.innerHTML = `<div><span class="inline-block w-3 h-3 rounded-full mr-2" style="background:${d.color}"></span>${displayName}${contact}</div>
         <div class="text-xs text-slate-500">${new Date(d.last_seen).toLocaleTimeString()}</div>`;
       list.appendChild(li);
     }
+
     if(coords.length) map.fitBounds(bounds, { padding: 40, maxZoom: 15 });
   }catch(err){ console.error(err); }
 }
