@@ -1,22 +1,217 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>{% block title %}Map Project{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css" rel="stylesheet" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gas Express</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- DESIGN SYSTEM: MEDIUM x GOOGLE --- */
+        
+        :root {
+            --bg-color: #ffffff;
+            --text-main: rgba(0, 0, 0, 0.84); /* Medium's specific black */
+            --text-muted: rgba(0, 0, 0, 0.54);
+            --accent-color: #1a8917; /* Medium-style Green */
+            --google-blue: #1a73e8;
+            --border-color: #f2f2f2;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            /* Google/System Sans for Body Text */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            font-size: 18px; /* Slightly larger text for readability */
+            line-height: 1.6;
+            padding-top: 80px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* TYPOGRAPHY - The "Medium" Feel */
+        h1, h2, h3, h4, h5, .navbar-brand {
+            /* Elegant Serif for Headers */
+            font-family: "Charter", "Bitstream Charter", "Sitka Text", Cambria, serif;
+            font-weight: 700;
+            color: #000;
+            letter-spacing: -0.02em; /* Tight letter spacing */
+        }
+
+        /* NAVBAR - Minimalist */
+        .navbar {
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 0;
+            transition: all 0.3s ease;
+        }
+
+        .navbar-brand {
+            font-size: 1.8rem;
+        }
+
+        .nav-link {
+            color: var(--text-muted) !important;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.2s;
+            margin-left: 20px;
+        }
+
+        .nav-link:hover {
+            color: #000 !important;
+        }
+
+        /* BUTTONS - Sleek & Flat */
+        .btn {
+            border-radius: 24px; /* Soft Pill */
+            padding: 8px 24px;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        /* Primary Action: Solid Black or Accent Green */
+        .btn-primary {
+            background-color: #000; /* Sophisticated Black */
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background-color: #333; /* Dark Grey on Hover */
+            transform: translateY(-1px);
+        }
+
+        /* Outline/Secondary Buttons */
+        .btn-outline-primary {
+            color: #000;
+            border: 1px solid rgba(0,0,0,0.15);
+            background: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            border-color: #000;
+            background: transparent;
+            color: #000;
+        }
+
+        .btn-danger {
+            background-color: transparent;
+            color: var(--text-muted);
+        }
+        .btn-danger:hover {
+            color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.05);
+        }
+
+        /* CARDS - Google Material 3 Vibe */
+        .card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: #fff;
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05); /* Soft, diffused shadow */
+            border-color: transparent;
+            transform: translateY(-2px);
+        }
+
+        .card-body {
+            padding: 2rem;
+        }
+
+        .price-tag {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-weight: 600;
+            color: var(--accent-color); /* Green Price */
+        }
+
+        /* ... existing styles ... */
+
+/* --- HORIZONTAL SCROLLING (SWIPE) LOGIC --- */
+.horizontal-scroll {
+    display: flex;              /* Aligns items in a row */
+    flex-wrap: nowrap;          /* Prevents dropping to next line */
+    overflow-x: auto;           /* Allows scrolling */
+    gap: 20px;                  /* Space between cards */
+    padding: 10px 5px 30px 5px; /* Padding for shadow/hover effects */
+    scroll-snap-type: x mandatory; /* Makes it snap to cards when scrolling */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iPhone */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.horizontal-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.horizontal-scroll {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+.scroll-card-wrapper {
+    flex: 0 0 auto;    /* IMPORTANT: This stops the card from shrinking */
+    width: 300px;      /* Fixed width for PC */
+    scroll-snap-align: center; /* Snap to center on mobile */
+}
+
+/* On mobile, make the card slightly wider for better feel */
+@media (max-width: 768px) {
+    .scroll-card-wrapper {
+        width: 85vw; /* 85% of screen width */
+    }
+}
+    </style>
 </head>
-<body class="bg-gray-100 text-gray-900 flex flex-col min-h-screen">
+<body>
 
-  {% include "partials/navbar.html" %}
+<nav class="navbar navbar-expand-lg fixed-top">
+  <div class="container">
+    <a class="navbar-brand" href="/">Gas Express</a>
+    
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="border:none">
+      <span class="navbar-toggler-icon" style="background-image: url('data:image/svg+xml;charset=utf8,%3Csvg viewBox=\'0 0 30 30\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath stroke=\'rgba(0, 0, 0, 0.7)\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-miterlimit=\'10\' d=\'M4 7h22M4 15h22M4 23h22\'/%3E%3C/svg%3E');"></span>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto align-items-center">
+        {% if user %}
+            <li class="nav-item"><span class="nav-link" style="cursor: default; color: #000 !important;">{{ user.full_name }}</span></li>
+            
+            <li class="nav-item"><a class="nav-link" href="/my-orders">Orders</a></li>
 
-  <main class="flex-grow container mx-auto px-4 py-8">
-    {% block content %}{% endblock %}
-  </main>
+            {% if user.is_admin %}
+                <li class="nav-item"><a class="nav-link" style="color: var(--accent-color) !important;" href="/admin">Dashboard</a></li>
+            {% endif %}
+            
+            <li class="nav-item ms-2">
+                <a class="btn btn-danger btn-sm" href="/logout">Sign out</a>
+            </li>
+        {% else %}
+            <li class="nav-item"><a class="nav-link" href="/login">Sign in</a></li>
+            <li class="nav-item ms-3">
+                <a class="btn btn-primary" href="/register">Get Started</a>
+            </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
 
-  {% include "partials/footer.html" %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>

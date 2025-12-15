@@ -1,327 +1,271 @@
-import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, Request, HTTPException, status, Depends
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+import httpx
+from fastapi import FastAPI, Request, Form, HTTPException, Depends, UploadFile, File
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.templating import Jinja2Templates
-import secrets
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.encoders import jsonable_encoder
-from datetime import datetime
 from tortoise.contrib.fastapi import register_tortoise
-from models import User, Location, Order
-from tortoise.exceptions import DoesNotExist
+from passlib.context import CryptContext
+from models import User, Cylinder, Order
 
-# --- Load environment variables ---
+import shutil
+import os
+import uuid
+
+from dotenv import load_dotenv
 load_dotenv()
+
+# Config
+MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+app = FastAPI()
+
+# --- MOUNT STATIC FILES ---
+# This allows us to access images at http://localhost:8000/static/uploads/filename.jpg
+app.mount("/static", StaticFiles(directory="static"), name="static")
+# 1. SECURITY & CONFIG
+SECRET_KEY = "super-secret-key-change-this"
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+# Paystack & Mapbox Keys
+PAYSTACK_SECRET = os.getenv("PAYSTACK_SECRET")
+PAYSTACK_PUBLIC = os.getenv("PAYSTACK_PUBLIC")
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
 
-# --- FastAPI setup ---
-app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="replace-this-with-a-secure-random-key")
 templates = Jinja2Templates(directory="templates")
-security = HTTPBasic()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- HELPER: SAVE IMAGE ---
+def save_image(file: UploadFile) -> str:
+    # Create a unique filename to prevent overwriting
+    file_extension = file.filename.split(".")[-1]
+    file_name = f"{uuid.uuid4()}.{file_extension}"
+    file_path = f"static/uploads/{file_name}"
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    return f"/{file_path}" # Return web-accessible path
+
+# --- HELPERS ---
+def verify_password(plain, hashed):
+    return pwd_context.verify(plain, hashed)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 async def get_current_user(request: Request):
     user_id = request.session.get("user_id")
-    if not user_id:
-        return None
-    return await User.get_or_none(id=user_id)
-
-
-
-
-# --- Routes ---
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    user_id = request.session.get("user_id")
-    user = None
-    locations = []
-
     if user_id:
-        user = await User.get_or_none(id=user_id)
-        if user:
-            locations = await Location.filter(user=user).order_by("-created_at").all()
+        return await User.get_or_none(id=user_id)
+    return None
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "user": user,
-        "locations": locations,
-        "mapbox_token": MAPBOX_TOKEN
-    })
+# --- AUTH ROUTES ---
 
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
 
-@app.get("/signup", response_class=HTMLResponse)
-async def signup_get(request: Request):
-    return templates.TemplateResponse("signup.html", {"request": request, "error": None})
-
-
-@app.post("/signup", response_class=HTMLResponse)
-async def signup_post(request: Request):
-    form = await request.form()
-    username = form.get("username", "").strip()
-    password = form.get("password", "")
-
-    if not username or not password:
-        return templates.TemplateResponse("signup.html", {"request": request, "error": "Username and password required"})
-
-    exists = await User.filter(username=username).exists()
-    if exists:
-        return templates.TemplateResponse("signup.html", {"request": request, "error": "Username already taken"})
-
-    user = User(username=username)
-    await user.set_password(password)  # 🔐 Hash password before saving
-    await user.save()
-
-    request.session["user_id"] = user.id
-    return RedirectResponse("/", status_code=302)
-
+@app.post("/register")
+async def register(request: Request, full_name: str = Form(...), email: str = Form(...), password: str = Form(...), phone: str = Form(...)):
+    if await User.filter(email=email).exists():
+        return templates.TemplateResponse("register.html", {"request": request, "error": "Email already exists"})
+    
+    hashed = get_password_hash(password)
+    await User.create(full_name=full_name, email=email, password_hash=hashed, phone=phone)
+    return RedirectResponse(url="/login", status_code=303)
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_get(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
 
-
-@app.post("/login", response_class=HTMLResponse)
-async def login_post(request: Request):
-    form = await request.form()
-    username = form.get("username", "").strip()
-    password = form.get("password", "")
-
-    user = await User.get_or_none(username=username)
-    if not user or not await user.verify_password(password):
+@app.post("/login")
+async def login(request: Request, email: str = Form(...), password: str = Form(...)):
+    user = await User.get_or_none(email=email)
+    if not user or not verify_password(password, user.password_hash):
         return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid credentials"})
-
+    
     request.session["user_id"] = user.id
-    return RedirectResponse("/", status_code=302)
-
+    # Redirect admin to dashboard, user to home
+    if user.is_admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    return RedirectResponse(url="/", status_code=303)
 
 @app.get("/logout")
 async def logout(request: Request):
-    request.session.pop("user_id", None)
-    return RedirectResponse("/", status_code=302)
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
 
-@app.get("/get_latest_location")
-async def get_latest_location(request: Request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+# --- CORE ROUTES ---
 
-    location = await Location.filter(user_id=user_id).order_by("-created_at").first()
-    if not location:
-        return JSONResponse({"message": "No location found"}, status_code=404)
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    user = await get_current_user(request)
+    cylinders = await Cylinder.all()
+    return templates.TemplateResponse("index.html", {
+        "request": request, 
+        "user": user, 
+        "cylinders": cylinders,
+        "paystack_key": PAYSTACK_PUBLIC
+    })
 
-    return JSONResponse({"name": location.name, "lat": location.lat, "long": location.long, "created_at": str(location.created_at)})
-
-@app.get("/get_all_locations")
-async def get_all_locations(request: Request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        return JSONResponse([], status_code=200)
-
-    locations = await Location.filter(user_id=user_id).order_by('-created_at').values(
-        "id", "name", "lat", "long", "created_at"
-    )
-
-    for loc in locations:
-        if isinstance(loc.get("created_at"), datetime):
-            loc["created_at"] = loc["created_at"].isoformat()
-
-    return JSONResponse(locations)
-
-@app.delete("/delete_location/{loc_id}")
-async def delete_location(request: Request, loc_id: int):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    location = await Location.get_or_none(id=loc_id)
-    if not location:
-        raise HTTPException(status_code=404, detail="Location not found")
-
-    # Security Check: Ensure the location belongs to the logged-in user
-    if location.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Forbidden: You do not own this location")
-
-    await location.delete()
-    return {"status": "deleted"}
-
-@app.post("/save_location")
-async def save_location(request: Request):
-    data = await request.json()
-
-    lat = data.get("lat")
-    long = data.get("long")
-    name = data.get("name")
-
-    user_id = request.session.get("user_id")
-    if not user_id:
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
-
-    user = await User.get_or_none(id=user_id)
-    if not user:
-        return JSONResponse({"error": "User not found"}, status_code=404)
-
-    loc = await Location.create(user=user, name=name, lat=lat, long=long)
-    
-    new_loc_data = {
-        "id": loc.id,
-        "name": loc.name,
-        "lat": loc.lat,
-        "long": loc.long,
-        "created_at": str(loc.created_at)
-    }
-    return JSONResponse({"message": "Location saved", "data": new_loc_data})
-
-
-@app.get("/order", response_class=HTMLResponse)
-async def order_page(request: Request):
+@app.post("/verify-payment")
+async def verify_payment(request: Request, data: dict):
     user = await get_current_user(request)
     if not user:
-        return RedirectResponse("/", status_code=303)
-    if user.delivery:
-        return RedirectResponse("/orders", status_code=303)
+        raise HTTPException(status_code=401, detail="Please login first")
 
-    locations = await Location.filter(user=user)
-    return templates.TemplateResponse("order.html", {"request": request, "locations": locations, "user": user})
+    reference = data.get('reference')
+    cylinder_id = data.get('cylinder_id')
+    coords = data.get('coords', {})
 
-
-
-@app.get("/orders", response_class=HTMLResponse)
-async def list_orders(request: Request):
-    user = await get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-    if not user.delivery:
-        return RedirectResponse("/", status_code=303)
-
-    orders = await Order.all().prefetch_related("location", "user")
-
-    order_data = [
-        {
-            "id": order.id,
-            "customer_name": order.user.username if order.user else "Unknown",
-            "location_name": order.location.name if order.location else "No location",
-        }
-        for order in orders
-    ]
-
-    return templates.TemplateResponse(
-        "orders.html",
-        {"request": request, "orders": order_data, "user": user}
-    )
-
-
-@app.post("/place_order")
-async def place_order(request: Request):
-    data = await request.json()
-    user = await get_current_user(request)
-    if not user:
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    if user.delivery:
-        return JSONResponse({"error": "Delivery men cannot place orders"}, status_code=403)
+    # Verify with Paystack
+    headers = {"Authorization": f"Bearer {PAYSTACK_SECRET}"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
     
-    cylinder_type = data.get("cylinder_type")
-    quantity = int(data.get("quantity", 1))
-    location_id = data.get("location_id")
+    if resp.status_code == 200 and resp.json()['data']['status'] == 'success':
+        paystack_data = resp.json()['data']
+        cylinder = await Cylinder.get(id=cylinder_id)
+        
+        await Order.create(
+            user=user,
+            guest_name=user.full_name,
+            cylinder=cylinder,
+            amount_paid=paystack_data['amount'] / 100,
+            paystack_ref=reference,
+            is_paid=True,
+            latitude=coords.get('lat'),
+            longitude=coords.get('lng')
+        )
+        return JSONResponse({"status": "success"})
     
-    location = await Location.get_or_none(id=location_id, user_id=user.id)
-    if not location:
-        return JSONResponse({"error": "Invalid location"}, status_code=400)
-    
-    order = await Order.create(
-        user=user,
-        location=location,
-        cylinder_type=cylinder_type,
-        quantity=quantity
-    )
-    return JSONResponse({"message": "Order placed", "order": jsonable_encoder(order)})
+    raise HTTPException(status_code=400, detail="Verification failed")
 
-@app.get("/route/{order_id}", response_class=HTMLResponse)
-async def delivery_route(request: Request, order_id: int):
-    user = await get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-    if not user.delivery:
-        return RedirectResponse("/", status_code=303)
 
-    order = await Order.get_or_none(id=order_id).prefetch_related("location", "user")
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
 
-    customer_location = {
-        "name": order.location.name,
-        "lat": order.location.lat,
-        "long": order.location.long
-    }
-
-    return templates.TemplateResponse(
-        "route.html",
-        {
-            "request": request,
-            "mapbox_token": MAPBOX_TOKEN,
-            "customer_location": customer_location,
-            "order_id": order.id,
-            "user": user
-        }
-    )
 @app.get("/my-orders", response_class=HTMLResponse)
 async def my_orders(request: Request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Please log in first.")
-
-    user = await User.get_or_none(id=user_id).prefetch_related("orders__location")
+    user = await get_current_user(request)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        return RedirectResponse(url="/login")
+    
+  
+    orders = await Order.filter(user=user).all().order_by('-created_at').prefetch_related('cylinder')
+    return templates.TemplateResponse("my_orders.html", {"request": request, "user": user, "orders": orders})
 
-    # Convert order data
-    orders = []
-    for order in user.orders:
-        location_name = getattr(order.location, "name", "No location")
-        orders.append({
-            "id": order.id,
-            "status": getattr(order, "status", "Pending"),
-            "location": location_name,
-            "created_at": order.created_at.strftime("%Y-%m-%d %H:%M"),
-        })
+# --- ADMIN ROUTES ---
 
-    return templates.TemplateResponse(
-        "my_orders.html",
-        {"request": request, "user": user, "orders": orders},
-    )
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(request: Request):
+    user = await get_current_user(request)
+    if not user or not user.is_admin:
+        return RedirectResponse(url="/login")
+    
+    # Fetch Orders
+    orders = await Order.filter(is_paid=True).all().order_by('-created_at').prefetch_related('cylinder', 'user')
+    # Fetch Products (Cylinders) for the Inventory Tab
+    cylinders = await Cylinder.all().order_by('price')
+    
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request, 
+        "user": user, 
+        "orders": orders,
+        "cylinders": cylinders
+    })
 
-@app.get("/test-db")
-async def test_db():
-    user = await User.get(username='IFKLogistics')
-    user.delivery = True
-    await user.save()
-#     # await User.all().delete()
-#     user = User(username='IFKLogistics')
-#     await user.set_password('12345678')
-#     await user.save()
+# --- PRODUCT MANAGEMENT ROUTES ---
+
+@app.post("/admin/cylinder/add")
+async def add_cylinder(
+    request: Request,
+    name: str = Form(...),
+    price: float = Form(...),
+    file: UploadFile = File(...) # Expect a file now
+):
+    user = await get_current_user(request)
+    if not user or not user.is_admin: return RedirectResponse("/")
+
+    # Save the file to disk
+    image_url = save_image(file)
+
+    await Cylinder.create(name=name, price=price, image_url=image_url)
+    return RedirectResponse(url="/admin", status_code=303)
+
+@app.post("/admin/cylinder/edit/{id}")
+async def edit_cylinder(
+    request: Request,
+    id: int,
+    name: str = Form(...),
+    price: float = Form(...),
+    file: UploadFile = File(None) # File is Optional here
+):
+    user = await get_current_user(request)
+    if not user or not user.is_admin: return RedirectResponse("/")
+
+    cylinder = await Cylinder.get(id=id)
+    
+    # Update text fields
+    cylinder.name = name
+    cylinder.price = price
+
+    # Only update image if a NEW file was uploaded
+    if file and file.filename:
+        # (Optional: You could delete the old image file here to save space)
+        cylinder.image_url = save_image(file)
+
+    await cylinder.save()
+    return RedirectResponse(url="/admin", status_code=303)
+
+@app.get("/admin/cylinder/delete/{id}")
+async def delete_cylinder(request: Request, id: int):
+    user = await get_current_user(request)
+    if not user or not user.is_admin: return RedirectResponse("/")
+
+    await Cylinder.filter(id=id).delete()
+    return RedirectResponse(url="/admin", status_code=303)
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(request: Request):
+    user = await get_current_user(request)
+    if not user or not user.is_admin:
+        return RedirectResponse(url="/login")
+        
+    orders = await Order.filter(is_paid=True).all().order_by('-created_at').prefetch_related('cylinder', 'user')
+    return templates.TemplateResponse("dashboard.html", {"request": request, "user": user, "orders": orders})
+
+@app.get("/admin/track/{order_id}", response_class=HTMLResponse)
+async def track_order(request: Request, order_id: int):
+    user = await get_current_user(request)
+    if not user or not user.is_admin:
+        return RedirectResponse(url="/login")
+
+    order = await Order.get(id=order_id).prefetch_related('cylinder', 'user')
+    return templates.TemplateResponse("tracking.html", {
+        "request": request, 
+        "order": order, 
+        "mapbox_token": os.getenv("MAPBOX_TOKEN")
+    })
 
 
-
-
-TORTOISE_ORM = {
-    "connections": {"default": os.getenv("DATABASE_URL")},
-    "apps": {
-        "models": {
-            "models": ["models", "aerich.models"],
-            "default_connection": "default",
-        },
-    },
-}
+@app.on_event("startup")
+async def startup_event():
+    # Seed Data
+    if await Cylinder.all().count() == 0:
+        await Cylinder.create(name="3kg Camp Gas", price=2500)
+        await Cylinder.create(name="12.5kg Home Cylinder", price=12500)
+        await Cylinder.create(name="50kg Industrial", price=45000)
+    
+    # Create Default Admin (Email: admin@gas.com, Pass: admin123)
+    if not await User.filter(email="admin@gas.com").exists():
+        hashed = get_password_hash("admin123")
+        await User.create(full_name="Super Admin", email="admin@gas.com", password_hash=hashed, is_admin=True)
 
 register_tortoise(
     app,
-    config=TORTOISE_ORM,
+    db_url=os.getenv("DATABASE_URL"),
+    modules={"models": ["models"]},
+    generate_schemas=True,
     add_exception_handlers=True,
 )
-
-
-# aerich init -t main.TORTOISE_ORM
-# aerich init-db
-# aerich migrate
-# aerich upgrade
